@@ -12,7 +12,8 @@ import {
   ArrowLeft,
   Wrench,
   CheckCircle2,
-  LogOut
+  LogOut,
+  ShieldCheck
 } from "lucide-react";
 import {
   loginUser,
@@ -33,6 +34,7 @@ export default function WorkerLoginPage({ lang = "en" }) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [isCustomerAccount, setIsCustomerAccount] = useState(false);
+  const [isAdminAccount, setIsAdminAccount] = useState(false);
   const [isPendingApproval, setIsPendingApproval] = useState(false);
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
@@ -47,8 +49,10 @@ export default function WorkerLoginPage({ lang = "en" }) {
       if (location.state?.errorMsg) {
         if (!isMounted) return;
         setErrorMsg(location.state.errorMsg);
-        if (location.state.actualRole === "customer" || location.state.roleMismatch) {
+        if (location.state.actualRole === "customer") {
           setIsCustomerAccount(true);
+        } else if (location.state.actualRole === "admin") {
+          setIsAdminAccount(true);
         }
       }
 
@@ -61,7 +65,9 @@ export default function WorkerLoginPage({ lang = "en" }) {
           if (authData.role === "worker") {
             if (authData.isIncomplete) {
               navigate("/worker/register", { replace: true });
-            } else if (authData.isPending) {
+            } else if (!authData.isPaymentVerified) {
+              navigate("/worker/payment", { replace: true });
+            } else if (!authData.isApproved) {
               navigate("/worker/pending", { replace: true });
             } else {
               navigate("/worker/dashboard", { replace: true });
@@ -71,6 +77,12 @@ export default function WorkerLoginPage({ lang = "en" }) {
             setErrorMsg(
               location.state?.errorMsg ||
                 "This account is registered as a customer. Please use worker login with your worker account."
+            );
+          } else if (authData.role === "admin") {
+            setIsAdminAccount(true);
+            setErrorMsg(
+              location.state?.errorMsg ||
+                "This account is registered as an Administrator. Please use the Admin Portal."
             );
           }
         }
@@ -91,6 +103,7 @@ export default function WorkerLoginPage({ lang = "en" }) {
       setLoading(true);
       await logoutUser();
       setIsCustomerAccount(false);
+      setIsAdminAccount(false);
       setErrorMsg("");
       setEmail("");
       setPassword("");
@@ -105,6 +118,7 @@ export default function WorkerLoginPage({ lang = "en" }) {
     e.preventDefault();
     setErrorMsg("");
     setIsCustomerAccount(false);
+    setIsAdminAccount(false);
     setIsPendingApproval(false);
 
     if (!email.trim() || !password) {
@@ -124,28 +138,40 @@ export default function WorkerLoginPage({ lang = "en" }) {
       // Fetch actual role from database & verify role access for worker portal
       const access = await verifyRoleAccess(user, "worker");
 
-      // If customer account, strictly deny worker access and show required message
-      if (!access.authorized && (access.actualRole === "customer" || access.reason === "role_mismatch")) {
-        await logoutUser();
-        setIsCustomerAccount(true);
-        setErrorMsg("This account is registered as a customer. Please use worker login with your worker account.");
-        return;
-      }
-
-      // If worker application is pending approval
-      if (access.isPending) {
-        navigate("/worker/pending", { replace: true });
-        return;
-      }
-
-      // If worker profile is incomplete
-      if (access.reason === "incomplete_profile") {
-        navigate("/worker/register", { replace: true });
-        return;
-      }
-
+      // Handle role mismatches cleanly and distinctly
       if (!access.authorized) {
         await logoutUser();
+
+        if (access.actualRole === "customer") {
+          setIsCustomerAccount(true);
+          setErrorMsg("This account is registered as a customer. Please use worker login with your worker account.");
+          return;
+        }
+
+        if (access.actualRole === "admin") {
+          setIsAdminAccount(true);
+          setErrorMsg("This account is registered as an Administrator. Please use the Admin Portal login.");
+          return;
+        }
+
+        // If worker profile is incomplete
+        if (access.reason === "incomplete_profile") {
+          navigate("/worker/register", { replace: true });
+          return;
+        }
+
+        // If registration fee payment is not verified
+        if (!access.isPaymentVerified || access.reason?.includes("payment")) {
+          navigate("/worker/payment", { replace: true });
+          return;
+        }
+
+        // If worker application is pending approval
+        if (access.isPending || !access.isApproved) {
+          navigate("/worker/pending", { replace: true });
+          return;
+        }
+
         setErrorMsg(access.message || (isEn ? "Worker access denied." : "కార్మికుల అనుమతి నిరాకరించబడింది."));
         return;
       }
@@ -273,6 +299,42 @@ export default function WorkerLoginPage({ lang = "en" }) {
             </div>
           )}
 
+          {/* Admin Role Mismatch Alert Notice */}
+          {isAdminAccount && (
+            <div className="auth-alert error" style={{ display: "flex", flexDirection: "column", gap: "8px", background: "#fef3c7", borderColor: "#f59e0b" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <ShieldCheck size={20} color="#d97706" />
+                <b style={{ color: "#92400e" }}>
+                  This account is registered as an Administrator.
+                </b>
+              </div>
+              <p style={{ fontSize: "0.85rem", color: "#78350f", margin: 0 }}>
+                {isEn
+                  ? "Administrator accounts cannot access the Worker Portal. Please sign in through the Admin Portal."
+                  : "అడ్మినిస్ట్రేటర్ ఖాతాలకు వర్కర్ పోర్టల్ యాక్సెస్ ఉండదు. దయచేసి అడ్మిన్ పోర్టల్ ద్వారా లాగిన్ అవ్వండి."}
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "4px" }}>
+                <button
+                  type="button"
+                  onClick={() => navigate("/admin/login")}
+                  className="btn-primary"
+                  style={{ fontSize: "0.82rem", padding: "6px 14px", background: "#d97706" }}
+                >
+                  {isEn ? "Go to Admin Login →" : "అడ్మిన్ లాగిన్‌కు వెళ్లండి →"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSignOutCustomer}
+                  className="btn-secondary"
+                  style={{ fontSize: "0.82rem", padding: "6px 12px", borderColor: "#cbd5e1" }}
+                >
+                  <LogOut size={13} style={{ marginRight: "4px" }} />
+                  {isEn ? "Sign Out & Try Another Account" : "లాగౌట్ చేయండి"}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Customer Role Mismatch Alert Notice */}
           {isCustomerAccount && (
             <div className="auth-alert error" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -318,7 +380,7 @@ export default function WorkerLoginPage({ lang = "en" }) {
           )}
 
           {/* Standard error banner */}
-          {errorMsg && !isCustomerAccount && !isPendingApproval && (
+          {errorMsg && !isCustomerAccount && !isAdminAccount && !isPendingApproval && (
             <div className="auth-alert error">
               <AlertCircle size={18} />
               <span>{errorMsg}</span>

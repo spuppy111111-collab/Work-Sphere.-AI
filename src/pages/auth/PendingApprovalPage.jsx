@@ -30,9 +30,15 @@ export default function PendingApprovalPage({ lang = "en" }) {
       const data = await getCurrentUserAndRole();
       setUserData(data);
 
-      if (data?.role === "worker" && data?.workerProfile?.approval_status === "approved") {
-        navigate("/worker/dashboard");
-        return;
+      if (data?.role === "worker") {
+        if (!data?.isPaymentVerified) {
+          navigate("/worker/payment", { replace: true });
+          return;
+        }
+        if (data?.workerProfile?.approval_status === "approved") {
+          navigate("/worker/dashboard", { replace: true });
+          return;
+        }
       }
 
       if (data?.workerProfile?.approval_status === "rejected") {

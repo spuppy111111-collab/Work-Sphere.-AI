@@ -1,98 +1,75 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  Wrench,
+  ShieldCheck,
   Zap,
-  Sparkles,
-  Hammer,
-  Paintbrush,
-  Cpu,
-  Wind,
-  ShieldAlert,
+  Phone,
   ArrowRight,
+  Briefcase,
+  Star,
+  Calendar,
+  MapPin,
   Check,
   ChevronDown,
-  ChevronUp,
-  MapPin,
-  Clock,
-  ShieldCheck,
-  Send,
-  User,
-  Users,
+  Sparkles,
   Search,
-  FileText,
-  Calendar,
-  Phone,
-  Mail,
-  HelpCircle,
+  Building2,
+  Wrench,
+  Paintbrush,
+  Hammer,
+  Clock,
+  Layers,
+  Heart,
+  User,
+  ChevronUp,
   Menu,
   X,
+  Send,
+  FileText,
+  Truck,
+  Cpu,
+  Lock,
   Compass,
   CheckCircle2,
   Award,
-  Layers,
-  Building2,
-  MessageSquare,
-  Sparkle,
-  Briefcase,
-  Shield
+  Users
 } from "lucide-react";
 import "../landing.css";
 
-export default function HomePage({ initialSection = null, initialModal = null, onSelectRole }) {
+export default function HomePage({ lang = "en" }) {
   const navigate = useNavigate();
+
   // Navigation & Scroll State
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [selectedCity, setSelectedCity] = useState("All Locations");
   const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
+  const [selectedCity, setSelectedCity] = useState("All Cities");
   const [activeStep, setActiveStep] = useState(1);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState("all");
   const [showBackToTop, setShowBackToTop] = useState(false);
-
-  // Modals state
-  const [authModalOpen, setAuthModalOpen] = useState(initialModal === "login");
-  const [authRoleTab, setAuthRoleTab] = useState("customer");
-  const [workerModalOpen, setWorkerModalOpen] = useState(initialModal === "worker");
-  const [serviceModalData, setServiceModalData] = useState(null);
-  const [contactModalOpen, setContactModalOpen] = useState(false);
-  const [activeFaq, setActiveFaq] = useState(null);
-
-  // Form states
-  const [workerForm, setWorkerForm] = useState({
-    name: "",
-    trade: "Plumbing",
-    phone: "",
-    city: "Guntur",
-    experience: "1-3 years",
-  });
-  const [workerSubmitted, setWorkerSubmitted] = useState(false);
-
-  const [contactForm, setContactForm] = useState({
-    name: "",
-    email: "",
-    message: "",
-  });
-  const [contactSubmitted, setContactSubmitted] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const isEn = lang === "en";
 
   // Scroll listener
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 40);
-      setShowBackToTop(window.scrollY > 450);
+      if (window.scrollY > 40) {
+        setIsScrolled(true);
+      } else {
+        setIsScrolled(false);
+      }
+
+      if (window.scrollY > 400) {
+        setShowBackToTop(true);
+      } else {
+        setShowBackToTop(false);
+      }
     };
+
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  // Handle initial section scroll
-  useEffect(() => {
-    if (initialSection) {
-      setTimeout(() => {
-        scrollToSection(initialSection);
-      }, 150);
-    }
-  }, [initialSection]);
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -106,240 +83,154 @@ export default function HomePage({ initialSection = null, initialModal = null, o
     }
   };
 
-  // 8 Required Service Categories
-  const serviceCategories = [
+  // 8 Service Categories matching reference screenshots
+  const allServices = [
     {
       id: "plumbing",
-      categoryType: "repair",
+      category: "repair",
       title: "Plumbing",
-      desc: "Leak detection, pipeline repairs, tap installations, bathroom sanitary fittings, and drain block clearing.",
+      desc: "Expert pipe fittings, water leak fixes, sanitary installations, and tap...",
       icon: Wrench,
-      img: "/images/cat_plumbing.jpg",
-      fallbackImg: "https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=800&q=85",
-      tags: ["Pipe Leak Repair", "Bathroom Fittings", "Drain Clearance"],
-      scope: [
-        "Concealed & exposed pipe leak diagnosis",
-        "Washbasin, commode & diverter installation",
-        "Kitchen sink drain blockage & sewer clearing",
-        "Overhead water tank float valve maintenance"
-      ]
+      img: "https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=800&q=85",
+      tags: ["Pipe Leak Repair", "Bathroom Fitting"],
     },
     {
       id: "electrical",
-      categoryType: "repair",
-      title: "Electrical",
-      desc: "Certified electrical diagnostics, switchboard repair, MCB panel maintenance, fan fitting, and wiring safety audits.",
+      category: "repair",
+      title: "Electrical Services",
+      desc: "Certified electricians for short circuits, switchboards, MCB panels, wiring, and f...",
       icon: Zap,
-      img: "/images/cat_electrical.jpg",
-      fallbackImg: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=800&q=85",
-      tags: ["Switchboard Repair", "MCB Troubleshooting", "Wiring Safety"],
-      scope: [
-        "Short-circuit diagnosis & earthing inspection",
-        "Ceiling fan & designer light installations",
-        "Main distribution board fuse & breaker fixes",
-        "Appliance power-point cabling & load balancing"
-      ]
-    },
-    {
-      id: "cleaning",
-      categoryType: "care",
-      title: "Cleaning",
-      desc: "Deep home sanitization, kitchen degreasing, bathroom scrubbing, sofa shampooing, and dust removal.",
-      icon: Sparkles,
-      img: "/images/cat_cleaning.jpg",
-      fallbackImg: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=800&q=85",
-      tags: ["Deep Sanitization", "Kitchen Degreasing", "Bathroom Scrubbing"],
-      scope: [
-        "Full apartment or villa deep cleaning",
-        "Kitchen chimney, countertop & tile degreasing",
-        "Intensive bathroom descaling & floor disinfection",
-        "Upholstery, mattress & sofa vacuum shampooing"
-      ]
+      img: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=800&q=85",
+      tags: ["MCB Tripping Fix", "Switchboard Repair"],
     },
     {
       id: "carpentry",
-      categoryType: "repair",
-      title: "Carpentry",
-      desc: "Custom furniture repair, door and lock fittings, cupboard hinges, modular shelving, and woodwork touchups.",
+      category: "repair",
+      title: "Carpentry & Woodwork",
+      desc: "Custom furniture assembly, door locks, modular cabinets, hinge repairs, and...",
       icon: Hammer,
-      img: "/images/cat_carpentry.jpg",
-      fallbackImg: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=85",
-      tags: ["Door Lock Fitting", "Cabinet Hinges", "Furniture Assembly"],
-      scope: [
-        "Main door latch, lock & handle alignment",
-        "Hydraulic wardrobe hinges & drawer channels",
-        "Flat-pack furniture assembly (beds, desks, racks)",
-        "Teakwood window frame repairs & touchups"
-      ]
+      img: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=85",
+      tags: ["Door Lock Fitting", "Cabinet Hinges"],
+    },
+    {
+      id: "cleaning",
+      category: "care",
+      title: "Home Cleaning",
+      desc: "Deep home sanitization, kitchen chimney degreasing, bathroom scrubbing, and so...",
+      icon: Sparkles,
+      img: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=800&q=85",
+      tags: ["Deep Home Cleaning", "Kitchen Degreasing"],
     },
     {
       id: "painting",
-      categoryType: "care",
-      title: "Painting",
-      desc: "Interior wall repainting, exterior weather coating, moisture-blocking primer, texture painting, and touchups.",
+      category: "care",
+      title: "Painting & Interiors",
+      desc: "Waterproofing, interior wall repaints, stencil artistry, texture coating, and...",
       icon: Paintbrush,
-      img: "/images/cat_painting.jpg",
-      fallbackImg: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=800&q=85",
-      tags: ["Interior Emulsion", "Wall Touch-ups", "Waterproof Coating"],
-      scope: [
-        "Room repaint & complete interior color refresh",
-        "Waterproofing damp barrier & anti-fungal primer",
-        "Decorative accent wall texture finishes",
-        "Doors, grills & window enamel polishing"
-      ]
+      img: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=800&q=85",
+      tags: ["Wall Touch-ups", "Waterproof Primer"],
     },
     {
       id: "appliance",
-      categoryType: "repair",
+      category: "repair",
       title: "Appliance Repair",
-      desc: "Fast diagnosis and repairs for washing machines, refrigerators, microwaves, and everyday home appliances.",
+      desc: "Fast diagnosis and genuine spares for washing machines, refrigerators,...",
       icon: Cpu,
-      img: "/images/cust_hero_worker.jpg",
-      fallbackImg: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=85",
-      tags: ["Washing Machine Fix", "Refrigerator Cooling", "Microwave Service"],
-      scope: [
-        "Washing machine drum, spin & drain troubleshooting",
-        "Refrigerator compressor cooling & thermostat fixes",
-        "Microwave magnetron & heating coil repairs",
-        "Kitchen chimney motor & filter maintenance"
-      ]
+      img: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=85",
+      tags: ["Washing Machine Drain Fix", "AC Gas Refill"],
     },
     {
-      id: "ac-services",
-      categoryType: "repair",
-      title: "AC Services",
-      desc: "Seasonal air conditioner servicing, filter deep cleaning, gas pressure refills, and cooling efficiency repair.",
-      icon: Wind,
-      img: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=800&q=85",
-      fallbackImg: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=800&q=85",
-      tags: ["AC Gas Refill", "Filter Cleaning", "Cooling Repair"],
-      scope: [
-        "Indoor split unit coil foam jet wash",
-        "Outdoor condenser unit dust & debris wash",
-        "R32/R410A refrigerant gas leak check & top-up",
-        "Thermostat calibration & compressor diagnostics"
-      ]
+      id: "moving",
+      category: "care",
+      title: "Moving & Delivery",
+      desc: "Careful household shifting, bubble wrapping, heavy appliance transport, an...",
+      icon: Truck,
+      img: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=800&q=85",
+      tags: ["Apartment Shifting", "Heavy Furniture Move"],
     },
     {
-      id: "pest-control",
-      categoryType: "care",
-      title: "Pest Control",
-      desc: "Eco-friendly, odorless pest management for termites, cockroaches, bedbugs, mosquitoes, and rodent prevention.",
-      icon: ShieldAlert,
-      img: "https://images.unsplash.com/photo-1584744982491-665216d95f8b?auto=format&fit=crop&w=800&q=85",
-      fallbackImg: "https://images.unsplash.com/photo-1584744982491-665216d95f8b?auto=format&fit=crop&w=800&q=85",
-      tags: ["Termite Treatment", "Cockroach Gel", "Odorless Spray"],
-      scope: [
-        "Kitchen cabinet odorless gel baiting",
-        "Woodwork anti-termite drilling & chemical injection",
-        "Bedbug thermal spray & mattress inspection",
-        "Drainage barrier netting & mosquito fogging"
-      ]
+      id: "business",
+      category: "care",
+      title: "Business & Daily Services",
+      desc: "Commercial facility maintenance, IT cable management, shopfront electricals, and...",
+      icon: Briefcase,
+      img: "https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=85",
+      tags: ["Retail Electric Audit", "Office Server Cable Rack"],
     },
   ];
 
-  const filteredServices = serviceCategories.filter((s) => {
+  const filteredServices = allServices.filter((s) => {
     if (activeCategoryFilter === "all") return true;
-    if (activeCategoryFilter === "repairs") return s.categoryType === "repair";
-    if (activeCategoryFilter === "care") return s.categoryType === "care";
+    if (activeCategoryFilter === "repairs") return s.category === "repair";
+    if (activeCategoryFilter === "care") return s.category === "care";
     return true;
   });
 
-  // FAQ Items
-  const faqList = [
-    {
-      q: "What is WorkSphere AI?",
-      a: "WorkSphere AI is an intelligent home-services marketplace that connects customers directly with vetted, qualified local technicians across essential trades including plumbing, electrical, carpentry, cleaning, painting, appliance repair, AC maintenance, and pest control."
-    },
-    {
-      q: "How do I discover and book a service professional?",
-      a: "Simply browse our 8 service categories, select the specific task you require, pick your preferred appointment time, and submit your booking request. Our platform matches you with qualified local professionals in your neighborhood."
-    },
-    {
-      q: "How are workers and technicians verified?",
-      a: "Technicians on WorkSphere AI undergo structured verification covering identity authentication, trade skills assessment, and service history checks before taking customer requests."
-    },
-    {
-      q: "How does customer-to-worker communication work?",
-      a: "Once a booking request is initiated, customers and workers can communicate directly regarding job details, arrival times, and site specifics with transparent status tracking throughout the engagement."
-    },
-    {
-      q: "How can skilled professionals join WorkSphere AI?",
-      a: "Trade professionals can register by clicking 'Become a Worker'. After providing trade specialization, experience, and contact details, applicants enter our credentialing process to receive verified local customer leads."
-    },
-    {
-      q: "Is there any hidden fee or booking surcharge?",
-      a: "No. WorkSphere AI is built on transparency. All service scopes and estimates are presented upfront before work begins, ensuring fair rates for homeowners and direct earnings for trade artisans."
-    }
-  ];
-
-  const cityOptions = ["All Locations", "Guntur", "Vijayawada", "Tenali", "Mangalagiri", "Amaravati", "Hyderabad"];
-
-  const handleWorkerFormSubmit = (e) => {
-    e.preventDefault();
-    setWorkerSubmitted(true);
-  };
-
-  const handleContactFormSubmit = (e) => {
-    e.preventDefault();
-    setContactSubmitted(true);
-  };
+  const cityOptions = ["All Cities", "Guntur", "Vijayawada", "Tenali", "Mangalagiri", "Amaravati", "Hyderabad"];
 
   return (
     <div className="landing-page-root">
       {/* =========================================================================
-          1. HEADER & RESPONSIVE NAVIGATION BAR
+          1. STICKY NAVIGATION BAR
           ========================================================================= */}
       <header className={`landing-navbar ${isScrolled ? "scrolled" : ""}`}>
         <div className="landing-container landing-nav-inner">
-          {/* WorkSphere AI Logo & Brand Name */}
+          {/* Brand Logo */}
           <div className="landing-brand" onClick={() => scrollToSection("hero")}>
             <div className="landing-brand-icon">
               <Sparkles size={20} />
             </div>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <span className="landing-brand-title">WorkSphere AI</span>
-              <span style={{ fontSize: "0.68rem", color: "#C8A96A", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700 }}>
-                Home Services Marketplace
-              </span>
-            </div>
+            <span className="landing-brand-title">WorkSphere AI</span>
+            <span className="landing-brand-badge">Professional</span>
           </div>
 
-          {/* Desktop Navigation Links */}
-          <nav className="landing-nav-menu" aria-label="Main Navigation">
-            <span className="landing-nav-link" onClick={() => scrollToSection("hero")}>
+          {/* Desktop Nav Links */}
+          <nav className="landing-nav-menu">
+            <span className="landing-nav-link active" onClick={() => scrollToSection("hero")}>
               Home
             </span>
             <span className="landing-nav-link" onClick={() => scrollToSection("services")}>
-              Services
+              Explore Services
             </span>
             <span className="landing-nav-link" onClick={() => scrollToSection("how-it-works")}>
               How It Works
             </span>
-            <span className="landing-nav-link" onClick={() => scrollToSection("why-worksphere")}>
-              About
+            <span className="landing-nav-link" onClick={() => scrollToSection("for-workers")}>
+              For Workers
             </span>
-            <span className="landing-nav-link" onClick={() => scrollToSection("contact")}>
-              Contact
+            <span className="landing-nav-link" onClick={() => scrollToSection("about-us")}>
+              About Us
             </span>
           </nav>
 
           {/* Nav Actions */}
           <div className="landing-nav-actions">
-            {/* Location Filter Dropdown */}
+            {/* City Dropdown */}
             <div style={{ position: "relative" }}>
               <button
                 className="landing-city-dropdown"
                 onClick={() => setCityDropdownOpen(!cityDropdownOpen)}
-                aria-label="Filter by Location"
               >
-                <MapPin size={14} color="#C8A96A" />
+                <MapPin size={14} color="#D6B779" />
                 <span>{selectedCity}</span>
                 <ChevronDown size={14} />
               </button>
 
               {cityDropdownOpen && (
-                <div className="landing-dropdown-menu">
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 8px)",
+                    right: 0,
+                    background: "#142D27",
+                    border: "1px solid rgba(255, 255, 255, 0.16)",
+                    borderRadius: "14px",
+                    padding: "8px",
+                    minWidth: "160px",
+                    boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
+                    zIndex: 120,
+                  }}
+                >
                   {cityOptions.map((c) => (
                     <div
                       key={c}
@@ -347,7 +238,15 @@ export default function HomePage({ initialSection = null, initialModal = null, o
                         setSelectedCity(c);
                         setCityDropdownOpen(false);
                       }}
-                      className={`landing-dropdown-item ${selectedCity === c ? "active" : ""}`}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        fontSize: "0.85rem",
+                        color: selectedCity === c ? "#D6B779" : "#FFFFFF",
+                        fontWeight: selectedCity === c ? "700" : "500",
+                        cursor: "pointer",
+                        background: selectedCity === c ? "rgba(255,255,255,0.06)" : "transparent",
+                      }}
                     >
                       {c}
                     </div>
@@ -356,23 +255,20 @@ export default function HomePage({ initialSection = null, initialModal = null, o
               )}
             </div>
 
-            {/* Sign In Button */}
+            {/* Log In Button */}
             <button
               className="landing-login-btn"
-              onClick={() => {
-                setAuthRoleTab("customer");
-                setAuthModalOpen(true);
-              }}
+              onClick={() => navigate("/login")}
               id="header-sign-in-btn"
             >
-              <User size={15} />
-              <span>Sign In</span>
+              <User size={16} />
+              <span>Log In</span>
             </button>
 
             {/* Get Started Button */}
             <button
               className="landing-btn-gold"
-              onClick={() => scrollToSection("services")}
+              onClick={() => navigate("/login")}
               id="header-get-started-btn"
             >
               <span>Get Started</span>
@@ -383,8 +279,7 @@ export default function HomePage({ initialSection = null, initialModal = null, o
             <button
               className="landing-mobile-toggle"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label="Toggle navigation menu"
-              id="mobile-nav-toggle-btn"
+              aria-label="Toggle navigation"
             >
               {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
@@ -392,244 +287,331 @@ export default function HomePage({ initialSection = null, initialModal = null, o
         </div>
 
         {/* Mobile Navigation Drawer */}
-        {mobileMenuOpen && (
-          <div className="landing-mobile-drawer">
-            <span className="landing-mobile-link" onClick={() => scrollToSection("hero")}>Home</span>
-            <span className="landing-mobile-link" onClick={() => scrollToSection("services")}>Services</span>
-            <span className="landing-mobile-link" onClick={() => scrollToSection("how-it-works")}>How It Works</span>
-            <span className="landing-mobile-link" onClick={() => scrollToSection("why-worksphere")}>About</span>
-            <span className="landing-mobile-link" onClick={() => scrollToSection("contact")}>Contact</span>
-            <div className="landing-mobile-drawer-actions">
-              <button
-                className="landing-btn-outline w-full"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setAuthModalOpen(true);
-                }}
-              >
-                Sign In
-              </button>
-              <button
-                className="landing-btn-gold w-full"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  scrollToSection("services");
-                }}
-              >
-                Explore Services
-              </button>
-            </div>
-          </div>
-        )}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              style={{
+                background: "#142D27",
+                borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+                padding: "1.5rem",
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <span className="landing-nav-link" onClick={() => scrollToSection("hero")}>Home</span>
+                <span className="landing-nav-link" onClick={() => scrollToSection("services")}>Explore Services</span>
+                <span className="landing-nav-link" onClick={() => scrollToSection("how-it-works")}>How It Works</span>
+                <span className="landing-nav-link" onClick={() => scrollToSection("for-workers")}>For Workers</span>
+                <span className="landing-nav-link" onClick={() => scrollToSection("about-us")}>About Us</span>
+                <div style={{ display: "flex", gap: "10px", marginTop: "1rem" }}>
+                  <button
+                    className="landing-btn-outline"
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      navigate("/login");
+                    }}
+                  >
+                    Log In
+                  </button>
+                  <button
+                    className="landing-btn-gold"
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      navigate("/login");
+                    }}
+                  >
+                    Get Started
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* =========================================================================
-          2. HERO SECTION
+          2. CINEMATIC HERO SECTION (Matches Reference Image 1 Pixel-for-Pixel)
           ========================================================================= */}
       <section id="hero" className="landing-hero">
         <div className="landing-container">
           <div className="landing-hero-grid">
-            {/* Left Column: Headlines & CTAs */}
-            <div>
+            {/* Left Content Column */}
+            <motion.div
+              initial={{ opacity: 0, y: 35 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+            >
               <div className="landing-hero-badge">
                 <span className="landing-hero-badge-dot" />
                 <span>WorkSphere AI</span>
                 <span className="landing-hero-badge-divider">|</span>
-                <span style={{ color: "#D0DCD4" }}>Verified Local Home Services</span>
+                <span style={{ color: "#D0DCD4" }}>VERIFIED LOCAL MARKETPLACE</span>
               </div>
 
               <h1 className="landing-hero-headline">
-                Trusted Home Services,
+                Your Next Trusted
                 <br />
-                <span className="landing-gold-highlight">Made Simple.</span>
+                Professional Is
+                <br />
+                <span className="landing-gold-highlight">One Click Away.</span>
               </h1>
 
               <p className="landing-hero-sub">
-                Discover skilled local service professionals, schedule verified trade specialists,
-                and track your home repairs with seamless confidence and upfront transparency.
+                Discover skilled local professionals, connect with the right people,
+                and make everyday service bookings simpler with WorkSphere AI.
               </p>
 
               <div className="landing-hero-buttons">
                 <button
                   className="landing-btn-gold"
                   onClick={() => scrollToSection("services")}
-                  id="hero-explore-services-btn"
                 >
-                  <span>Explore Services</span>
+                  <span>Find a Worker</span>
                   <ArrowRight size={16} />
                 </button>
 
                 <button
                   className="landing-btn-outline"
-                  onClick={() => {
-                    setWorkerSubmitted(false);
-                    setWorkerModalOpen(true);
-                  }}
-                  id="hero-become-worker-btn"
+                  onClick={() => navigate("/worker/register")}
                 >
-                  <Users size={16} />
-                  <span>Become a Worker</span>
+                  <span>Join as a Professional</span>
                 </button>
               </div>
+            </motion.div>
 
-              {/* Verified Features Pills */}
-              <div className="hero-features-strip">
-                <div className="hero-feature-pill">
-                  <ShieldCheck size={16} color="#C8A96A" />
-                  <span>Verified Credentials</span>
-                </div>
-                <div className="hero-feature-pill">
-                  <Clock size={16} color="#C8A96A" />
-                  <span>Clear Time Slots</span>
-                </div>
-                <div className="hero-feature-pill">
-                  <CheckCircle2 size={16} color="#C8A96A" />
-                  <span>Direct Communication</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column: Visual Layout with High-Quality Image */}
-            <div>
+            {/* Right Photo Collage Card (Matches Reference Screenshot 1) */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 40 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.9, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+            >
               <div className="hero-collage-card">
-                {/* Floating Top Badge */}
+                {/* Floating Top Badge: Verified Professional */}
                 <div className="hero-floating-badge-top">
                   <div className="hero-floating-icon-wrap">
                     <ShieldCheck size={18} />
                   </div>
                   <div>
-                    <div style={{ fontSize: "0.85rem", fontWeight: "800", color: "#FFFFFF" }}>
-                      Verified Professionals
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ fontSize: "0.85rem", fontWeight: "800", color: "#FFFFFF" }}>
+                        Verified Professional
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "#D0DCD4" }}>Police & Skill Verified</div>
+                  </div>
+                </div>
+
+                {/* Collage Grid: 1 Tall Left + 2 Stacked Right */}
+                <div className="hero-collage-grid">
+                  {/* Left Tall Panel: Master Electrician */}
+                  <div className="hero-collage-left-tall">
+                    <img
+                      src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=800&q=85"
+                      alt="Master Electrician Rajesh Sharma"
+                    />
+                    <div className="hero-panel-caption">
+                      <div className="hero-panel-role">MASTER ELECTRICIAN</div>
+                      <div className="hero-panel-name">Rajesh Sharma · 12 yrs exp</div>
+                    </div>
+                  </div>
+
+                  {/* Right Stack: Custom Woodwork (Top) + Plumbing Specialist (Bottom) */}
+                  <div className="hero-collage-right-stack">
+                    {/* Top: Custom Teak Woodwork */}
+                    <div className="hero-collage-thumb">
+                      <img
+                        src="https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=85"
+                        alt="Custom Teak Woodwork Harpreet Singh"
+                      />
+                      <div className="hero-panel-caption">
+                        <div className="hero-panel-role">CUSTOM TEAK WOODWORK</div>
+                        <div className="hero-panel-name">Harpreet Singh</div>
+                      </div>
+                    </div>
+
+                    {/* Bottom: Plumbing Specialist */}
+                    <div className="hero-collage-thumb">
+                      <img
+                        src="https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=800&q=85"
+                        alt="Plumbing Specialist Anand Verma"
+                      />
+                      <div className="hero-panel-caption">
+                        <div className="hero-panel-role">PLUMBING SPECIALIST</div>
+                        <div className="hero-panel-name">Anand Verma</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Consultation Banner */}
+                <div className="hero-collage-banner">
+                  <div style={{ width: "22px", height: "22px", borderRadius: "50%", border: "1px solid #D6B779", display: "grid", placeItems: "center", color: "#D6B779", flexShrink: 0 }}>
+                    <Check size={13} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: "700", color: "#FFFFFF" }}>
+                      Customer Consultation & Transparent Handover
                     </div>
                     <div style={{ fontSize: "0.72rem", color: "#D0DCD4" }}>
-                      Trade & Background Verified
+                      Upfront quotes with no hidden charges
                     </div>
                   </div>
                 </div>
 
-                {/* Main Hero Visual Layout */}
-                <div className="hero-visual-container">
-                  <img
-                    src="/images/hero_workers.jpg"
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1000&q=85";
-                    }}
-                    alt="WorkSphere AI Professional Technicians"
-                    className="hero-main-image"
-                  />
-                  <div className="hero-visual-overlay">
-                    <div className="hero-panel-role">VERIFIED HOME TRADES</div>
-                    <div className="hero-panel-name">Direct Local Connections Across 8 Core Disciplines</div>
-                  </div>
-                </div>
-
-                {/* Bottom Assurance Banner */}
-                <div className="hero-collage-banner">
-                  <div className="hero-banner-check">
-                    <Check size={14} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "0.84rem", fontWeight: "700", color: "#FFFFFF" }}>
-                      Structured Scope & Upfront Transparency
-                    </div>
-                    <div style={{ fontSize: "0.73rem", color: "#D0DCD4" }}>
-                      Clear service details before work begins with no hidden surprises
-                    </div>
-                  </div>
-                </div>
-
-                {/* Floating Bottom Badge */}
+                {/* Floating Bottom Badge: Quick Booking */}
                 <div className="hero-floating-badge-bottom">
-                  <div className="hero-floating-icon-wrap" style={{ background: "rgba(200, 169, 106, 0.2)" }}>
-                    <Calendar size={16} color="#C8A96A" />
+                  <div className="hero-floating-icon-wrap" style={{ background: "rgba(214, 183, 121, 0.15)" }}>
+                    <Calendar size={16} />
                   </div>
                   <div>
-                    <div style={{ fontSize: "0.82rem", fontWeight: "800", color: "#FFFFFF" }}>
-                      Easy Scheduling
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ fontSize: "0.82rem", fontWeight: "800", color: "#FFFFFF" }}>
+                        Quick Booking
+                      </span>
                     </div>
-                    <div style={{ fontSize: "0.72rem", color: "#C8A96A" }}>
-                      Choose your preferred day & slot
-                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "#D6B779" }}>Slot Confirmed in 60s</div>
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
 
       {/* =========================================================================
-          3. SERVICE CATEGORIES (8 Core Categories)
+          3. OVERLAPPING 4-METRIC STATS BAR (Matches Screenshot 2 & 3)
+          ========================================================================= */}
+      <div className="landing-stats-overlap">
+        <div className="landing-container">
+          <motion.div
+            className="landing-stats-card"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.7 }}
+          >
+            <div className="landing-stats-row">
+              {/* Stat 1 */}
+              <div className="landing-stat-item">
+                <div className="landing-stat-icon-wrap">
+                  <Layers size={22} />
+                </div>
+                <div>
+                  <div className="landing-stat-num">50+ Trades</div>
+                  <div className="landing-stat-label">Service Categories</div>
+                  <div className="landing-stat-desc">From wiring to plumbing & bespoke woodwork</div>
+                </div>
+              </div>
+
+              {/* Stat 2 */}
+              <div className="landing-stat-item">
+                <div className="landing-stat-icon-wrap">
+                  <Calendar size={22} />
+                </div>
+                <div>
+                  <div className="landing-stat-num">Instant Slots</div>
+                  <div className="landing-stat-label">Easy Booking</div>
+                  <div className="landing-stat-desc">Simple 3-step scheduling process</div>
+                </div>
+              </div>
+
+              {/* Stat 3 */}
+              <div className="landing-stat-item">
+                <div className="landing-stat-icon-wrap">
+                  <MapPin size={22} />
+                </div>
+                <div>
+                  <div className="landing-stat-num">12+ Metros</div>
+                  <div className="landing-stat-label">Local Connections</div>
+                  <div className="landing-stat-desc">Hyper-local neighborhood coverage across India</div>
+                </div>
+              </div>
+
+              {/* Stat 4 */}
+              <div className="landing-stat-item">
+                <div className="landing-stat-icon-wrap">
+                  <Heart size={22} />
+                </div>
+                <div>
+                  <div className="landing-stat-num">Fair Pricing</div>
+                  <div className="landing-stat-label">Customer-First Trust</div>
+                  <div className="landing-stat-desc">Transparent quotes & direct coordination</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sub-bar */}
+            <div className="landing-stats-subbar">
+              <span>Verified Local Professionals & Biometric Background Audits</span>
+              <span className="landing-stats-subbar-right">Real-time technician availability sync active</span>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+
+      {/* =========================================================================
+          4. SERVICE CATEGORY DIRECTORY (8 Cards Matching Screenshot 2 & 4)
           ========================================================================= */}
       <section id="services" className="landing-section landing-section-ivory">
         <div className="landing-container">
           <div className="landing-section-header">
             <div>
               <div className="landing-eyebrow">
-                <span>• SERVICE CATEGORIES</span>
+                <span>• SERVICE CATEGORY DIRECTORY</span>
               </div>
               <h2 className="landing-section-title">
-                Explore Essential Home Trades
+                Everyday Problems. <u>Skilled</u> Solutions.
               </h2>
               <p className="landing-section-sub">
-                Connect with skilled professionals across 8 core service categories tailored for your home needs.
+                Discover professionals for the jobs that matter most.
               </p>
             </div>
 
             {/* Filter Pills */}
-            <div className="landing-filter-pills" role="tablist">
+            <div className="landing-filter-pills">
               <button
                 className={`landing-filter-btn ${activeCategoryFilter === "all" ? "active" : ""}`}
                 onClick={() => setActiveCategoryFilter("all")}
               >
-                All 8 Categories
+                All 8 Services
               </button>
               <button
                 className={`landing-filter-btn ${activeCategoryFilter === "repairs" ? "active" : ""}`}
                 onClick={() => setActiveCategoryFilter("repairs")}
               >
-                Repairs & Maintenance
+                Home Repairs
               </button>
               <button
                 className={`landing-filter-btn ${activeCategoryFilter === "care" ? "active" : ""}`}
                 onClick={() => setActiveCategoryFilter("care")}
               >
-                Home Care & Improvements
+                Upgrades & Care
               </button>
             </div>
           </div>
 
-          {/* 8 Category Cards Grid */}
+          {/* 8 Cards Grid */}
           <div className="landing-services-grid">
-            {filteredServices.map((service) => {
+            {filteredServices.map((service, index) => {
               const ServiceIcon = service.icon;
               return (
-                <div
+                <motion.div
                   key={service.id}
                   className="service-card"
-                  onClick={() => setServiceModalData(service)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      setServiceModalData(service);
-                    }
-                  }}
-                  aria-label={`View details for ${service.title}`}
+                  initial={{ opacity: 0, y: 25 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: index * 0.08 }}
+                  onClick={() => setShowLoginModal(true)}
                 >
                   <div className="service-card-image-wrap">
-                    <img
-                      src={service.img}
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = service.fallbackImg;
-                      }}
-                      alt={service.title}
-                      loading="lazy"
-                    />
+                    <img src={service.img} alt={service.title} loading="lazy" />
                     <div className="service-card-icon-badge">
-                      <ServiceIcon size={18} />
+                      <ServiceIcon size={17} />
                     </div>
                   </div>
 
@@ -645,12 +627,12 @@ export default function HomePage({ initialSection = null, initialModal = null, o
                   </div>
 
                   <div className="service-card-footer">
-                    <span className="service-card-action-text">Explore Scope</span>
+                    <span className="service-card-action-text">View & Book</span>
                     <div className="service-card-arrow-circle">
                       <ArrowRight size={14} />
                     </div>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
@@ -658,7 +640,7 @@ export default function HomePage({ initialSection = null, initialModal = null, o
       </section>
 
       {/* =========================================================================
-          4. HOW IT WORKS (4 Clear Steps)
+          5. HOW WORKSPHERE AI WORKS (4 Steps Matching Screenshot 5)
           ========================================================================= */}
       <section id="how-it-works" className="landing-section landing-section-sage">
         <div className="landing-container">
@@ -670,18 +652,20 @@ export default function HomePage({ initialSection = null, initialModal = null, o
               How WorkSphere AI Works
             </h2>
             <p className="landing-section-sub" style={{ margin: "0.75rem auto 0", textAlign: "center" }}>
-              From discovering the right trade to completing the job, our platform coordinates a reliable,
-              transparent home service experience.
+              From first tap to completed job, experience a transparent, streamlined connection workflow
+              engineered for trust and peace of mind.
             </p>
           </div>
 
           <div className="how-steps-grid">
-            {/* Step 1 */}
-            <div
+            {/* Step 01 */}
+            <motion.div
               className={`step-card ${activeStep === 1 ? "active" : ""}`}
               onClick={() => setActiveStep(1)}
-              tabIndex={0}
-              role="button"
+              initial={{ opacity: 0, y: 25 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
             >
               <div className="step-card-header">
                 <span className="step-label">STEP 01</span>
@@ -689,24 +673,28 @@ export default function HomePage({ initialSection = null, initialModal = null, o
                   <FileText size={18} />
                 </div>
               </div>
-              <h3 className="step-title">Choose a Service</h3>
-              <div className="step-quote">“Select the exact trade and task required for your home.”</div>
+              <h3 className="step-title">Describe Your Need</h3>
+              <div className="step-quote">“Tell us what needs fixing or what service you need.”</div>
               <p className="step-desc">
-                Browse our structured catalog of 8 core home trades. Specify your task, whether it is an urgent
-                pipe repair, room painting, or AC servicing.
+                Select your trade, describe the problem, and pick your preferred date and time slot.
+                Our smart system scopes the job instantly.
               </p>
               <div className="step-card-footer">
-                <span>Task Selection</span>
-                <Check size={16} color="#347B63" />
+                <span>Selected Step</span>
+                <div style={{ color: "#347B63" }}>
+                  <Check size={16} />
+                </div>
               </div>
-            </div>
+            </motion.div>
 
-            {/* Step 2 */}
-            <div
+            {/* Step 02 */}
+            <motion.div
               className={`step-card ${activeStep === 2 ? "active" : ""}`}
               onClick={() => setActiveStep(2)}
-              tabIndex={0}
-              role="button"
+              initial={{ opacity: 0, y: 25 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.1 }}
             >
               <div className="step-card-header">
                 <span className="step-label">STEP 02</span>
@@ -714,49 +702,53 @@ export default function HomePage({ initialSection = null, initialModal = null, o
                   <Search size={18} />
                 </div>
               </div>
-              <h3 className="step-title">Find a Suitable Professional</h3>
-              <div className="step-quote">“Discover verified trade specialists near your location.”</div>
+              <h3 className="step-title">Discover Professionals</h3>
+              <div className="step-quote">“Explore relevant workers and compare available information.”</div>
               <p className="step-desc">
-                Review available technicians with verified trade backgrounds, proven skill experience,
-                and hyper-local proximity to your neighborhood.
+                Review transparent worker ratings, trade certifications, verified job completions,
+                and hourly or fixed rates before deciding.
               </p>
               <div className="step-card-footer">
-                <span>Technician Discovery</span>
+                <span>Click to inspect</span>
                 <ArrowRight size={14} />
               </div>
-            </div>
+            </motion.div>
 
-            {/* Step 3 */}
-            <div
+            {/* Step 03 */}
+            <motion.div
               className={`step-card ${activeStep === 3 ? "active" : ""}`}
               onClick={() => setActiveStep(3)}
-              tabIndex={0}
-              role="button"
+              initial={{ opacity: 0, y: 25 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.2 }}
             >
               <div className="step-card-header">
                 <span className="step-label">STEP 03</span>
                 <div className="step-icon-wrap">
-                  <Calendar size={18} />
+                  <Send size={18} />
                 </div>
               </div>
-              <h3 className="step-title">Request a Booking</h3>
-              <div className="step-quote">“Select your preferred date, time slot, and job specifics.”</div>
+              <h3 className="step-title">Contact or Book</h3>
+              <div className="step-quote">“Choose a professional and send a booking request.”</div>
               <p className="step-desc">
-                Submit your booking with clear task details and transparent scope definitions.
-                Technicians receive direct notifications to confirm scheduling.
+                Send your request directly to available pros in your neighborhood with upfront
+                price estimates and no hidden surprises.
               </p>
               <div className="step-card-footer">
-                <span>Booking Dispatch</span>
+                <span>Click to inspect</span>
                 <ArrowRight size={14} />
               </div>
-            </div>
+            </motion.div>
 
-            {/* Step 4 */}
-            <div
+            {/* Step 04 */}
+            <motion.div
               className={`step-card ${activeStep === 4 ? "active" : ""}`}
               onClick={() => setActiveStep(4)}
-              tabIndex={0}
-              role="button"
+              initial={{ opacity: 0, y: 25 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.3 }}
             >
               <div className="step-card-header">
                 <span className="step-label">STEP 04</span>
@@ -764,109 +756,207 @@ export default function HomePage({ initialSection = null, initialModal = null, o
                   <Clock size={18} />
                 </div>
               </div>
-              <h3 className="step-title">Track Your Service</h3>
-              <div className="step-quote">“Follow real-time status and communicate about the job.”</div>
+              <h3 className="step-title">Track Your Request</h3>
+              <div className="step-quote">“Follow your booking status and communicate about the job.”</div>
               <p className="step-desc">
-                Track your request progression from acceptance to technician arrival. Coordinate site details
-                directly and confirm job satisfaction upon completion.
+                Monitor live request progression from confirmation to arrival, inspect work completion,
+                and pay securely upon satisfaction.
               </p>
               <div className="step-card-footer">
-                <span>Status & Fulfillment</span>
+                <span>Click to inspect</span>
                 <ArrowRight size={14} />
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
 
       {/* =========================================================================
-          5. WHY WORKSPHERE AI (Product Capabilities)
+          6. WORKER SHOWCASE & ADVANTAGES
           ========================================================================= */}
-      <section id="why-worksphere" className="landing-section landing-section-dark">
+      <section id="for-workers" className="landing-section landing-section-ivory">
         <div className="landing-container">
-          <div style={{ textAlign: "center", maxWidth: "700px", margin: "0 auto 3.5rem" }}>
-            <div className="landing-eyebrow" style={{ justifyContent: "center", color: "#C8A96A" }}>
-              <span>• CORE PRODUCT CAPABILITIES</span>
+          <div className="worker-showcase-grid">
+            {/* Left Image Showcase */}
+            <motion.div
+              className="worker-showcase-photo-card"
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.7 }}
+            >
+              <img
+                src="https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=85"
+                alt="Indian skilled worker craftsman"
+              />
+              <div className="worker-showcase-overlay-badge">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "0.95rem", fontWeight: "800", color: "#FFFFFF" }}>
+                    Dedicated Artisan Network
+                  </span>
+                  <span style={{ fontSize: "0.72rem", color: "#D6B779", fontWeight: "700" }}>
+                    Verified Tier 1
+                  </span>
+                </div>
+                <div style={{ fontSize: "0.8rem", color: "#D0DCD4" }}>
+                  Direct customer bookings without middlemen cuts or arbitrary commissions.
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Right Information */}
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.7 }}
+            >
+              <div className="landing-eyebrow">
+                <span>• FOR LOCAL ARTISANS & TECHNICIANS</span>
+              </div>
+              <h2 className="landing-section-title">
+                Your Skills Deserve More Opportunities.
+              </h2>
+              <p className="landing-section-sub">
+                Build your professional presence, connect with customers, and manage your service requests
+                through one convenient, modern platform.
+              </p>
+
+              <div className="benefit-list">
+                <div className="benefit-pill">
+                  <Check size={16} className="benefit-pill-icon" />
+                  <span>Create Professional Profile</span>
+                </div>
+                <div className="benefit-pill">
+                  <Check size={16} className="benefit-pill-icon" />
+                  <span>Showcase Skills & Portfolio</span>
+                </div>
+                <div className="benefit-pill">
+                  <Check size={16} className="benefit-pill-icon" />
+                  <span>Receive Real Booking Leads</span>
+                </div>
+                <div className="benefit-pill">
+                  <Check size={16} className="benefit-pill-icon" />
+                  <span>Set Flexible Working Slots</span>
+                </div>
+                <div className="benefit-pill">
+                  <Check size={16} className="benefit-pill-icon" />
+                  <span>Review Booking Details</span>
+                </div>
+                <div className="benefit-pill">
+                  <Check size={16} className="benefit-pill-icon" />
+                  <span>Dedicated Worker Portal</span>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "14px", flexWrap: "wrap" }}>
+                <button
+                  className="landing-btn-gold"
+                  onClick={() => navigate("/worker/register")}
+                >
+                  <span>Register as Worker</span>
+                  <ArrowRight size={15} />
+                </button>
+                <button
+                  className="landing-btn-outline"
+                  style={{ color: "#142D27", borderColor: "#DDE4DA", background: "#FFFFFF" }}
+                  onClick={() => navigate("/worker/login")}
+                >
+                  <span>Worker Sign In</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================================
+          7. AI-POWERED PLATFORM FEATURES (Forest Green & Gold Accents)
+          ========================================================================= */}
+      <section className="landing-section landing-section-dark">
+        <div className="landing-container">
+          <div style={{ textAlign: "center", maxWidth: "680px", margin: "0 auto 3.5rem" }}>
+            <div className="landing-eyebrow" style={{ justifyContent: "center", color: "#D6B779" }}>
+              <span>• INTELLIGENT MATCHING</span>
             </div>
             <h2 className="landing-section-title dark" style={{ textAlign: "center" }}>
-              Why WorkSphere AI
+              Smarter Connections. Better Service Experiences.
             </h2>
             <p className="landing-section-sub dark" style={{ margin: "0.75rem auto 0", textAlign: "center" }}>
-              A modern digital marketplace platform built specifically to streamline home service discovery,
-              booking visibility, and professional coordination.
+              Engineered with modern digital scheduling and verified artisan credentials for rapid resolutions.
             </p>
           </div>
 
           <div className="ai-features-grid">
-            {/* Feature 1 */}
+            {/* Card 1 */}
             <div className="ai-feature-card">
               <div className="ai-feature-icon-wrap">
                 <Compass size={22} />
               </div>
-              <h3 className="ai-feature-title">Convenient Service Discovery</h3>
+              <h3 className="ai-feature-title">Intelligent Service Discovery</h3>
               <p className="ai-feature-desc">
-                Quickly locate the exact trade category and task specification you need without endless phone calls
-                or uncertain word-of-mouth referrals.
+                Instant semantic trade detection that accurately connects specific household defects
+                with certified master technicians.
               </p>
             </div>
 
-            {/* Feature 2 */}
+            {/* Card 2 */}
             <div className="ai-feature-card">
               <div className="ai-feature-icon-wrap">
-                <Clock size={22} />
+                <Award size={22} />
               </div>
-              <h3 className="ai-feature-title">Clear Booking Status</h3>
+              <h3 className="ai-feature-title">Relevant Worker Matches</h3>
               <p className="ai-feature-desc">
-                Transparent request tracking at every stage, providing clarity from initial submission through
-                worker confirmation, dispatch, and work completion.
+                Prioritizes nearby technicians based on verified experience ratings, trade specialty,
+                and on-time completion records.
               </p>
             </div>
 
-            {/* Feature 3 */}
+            {/* Card 3 */}
             <div className="ai-feature-card">
               <div className="ai-feature-icon-wrap">
-                <MessageSquare size={22} />
+                <MapPin size={22} />
               </div>
-              <h3 className="ai-feature-title">Customer-Worker Communication</h3>
+              <h3 className="ai-feature-title">Location-Aware Routing</h3>
               <p className="ai-feature-desc">
-                Direct channels for customers and technicians to share task notes, access instructions, and arrival
-                updates without middleman confusion.
+                Hyper-local neighborhood assignment across Guntur, Vijayawada, and Krishna districts
+                ensuring minimal travel wait times.
               </p>
             </div>
 
-            {/* Feature 4 */}
+            {/* Card 4 */}
             <div className="ai-feature-card">
               <div className="ai-feature-icon-wrap">
-                <Layers size={22} />
+                <Calendar size={22} />
               </div>
-              <h3 className="ai-feature-title">Responsive & Accessible Design</h3>
+              <h3 className="ai-feature-title">Live Booking Management</h3>
               <p className="ai-feature-desc">
-                Engineered for maximum accessibility across smartphones, tablets, and desktop displays with readable
-                contrast, clear typography, and zero horizontal overflow.
+                Real-time booking confirmations, instant request updates, and clear schedule
+                syncing directly on your dashboard.
               </p>
             </div>
 
-            {/* Feature 5 */}
+            {/* Card 5 */}
             <div className="ai-feature-card">
               <div className="ai-feature-icon-wrap">
                 <ShieldCheck size={22} />
               </div>
-              <h3 className="ai-feature-title">Structured Trade Credentialing</h3>
+              <h3 className="ai-feature-title">Role-Based Dashboards</h3>
               <p className="ai-feature-desc">
-                Every worker profile is organized around trade specializations, verified background details,
-                and confirmed capabilities for dependable work standards.
+                Dedicated interfaces tailored specifically for Customers, Workers, and Admins
+                with database-backed role permissions.
               </p>
             </div>
 
-            {/* Feature 6 */}
+            {/* Card 6 */}
             <div className="ai-feature-card">
               <div className="ai-feature-icon-wrap">
-                <FileText size={22} />
+                <Users size={22} />
               </div>
-              <h3 className="ai-feature-title">Transparent Task Scoping</h3>
+              <h3 className="ai-feature-title">Worker Profile Tools</h3>
               <p className="ai-feature-desc">
-                Detailed service descriptions outline exactly what each job entails before dispatch,
-                eliminating ambiguity and establishing mutual trust.
+                Empowering technicians with self-serve availability slots, service area toggles,
+                and job history inspection tools.
               </p>
             </div>
           </div>
@@ -874,154 +964,139 @@ export default function HomePage({ initialSection = null, initialModal = null, o
       </section>
 
       {/* =========================================================================
-          6. SEPARATE CUSTOMER AND WORKER ENTRY POINTS
+          8. TESTIMONIALS (Demonstration Content)
           ========================================================================= */}
-      <section className="landing-section landing-section-ivory">
-        <div className="landing-container">
-          <div className="entry-points-grid">
-            {/* Customer Entry Point */}
-            <div className="entry-card customer-entry-card">
-              <div className="entry-badge customer-badge">
-                <User size={14} />
-                <span>For Customers & Homeowners</span>
-              </div>
-              <h3 className="entry-title">Looking for Trusted Home Help?</h3>
-              <p className="entry-desc">
-                Discover local trade specialists for everyday home repairs, installations, deep cleaning,
-                and improvements. Fast scoping and reliable scheduling.
-              </p>
-              <ul className="entry-points-list">
-                <li><Check size={16} color="#347B63" /> Browse 8 verified home trade categories</li>
-                <li><Check size={16} color="#347B63" /> Upfront service scoping & clear slot scheduling</li>
-                <li><Check size={16} color="#347B63" /> Direct communication with your assigned technician</li>
-              </ul>
-              <button
-                className="landing-btn-gold"
-                onClick={() => scrollToSection("services")}
-                id="customer-explore-btn"
-              >
-                <span>Explore Services</span>
-                <ArrowRight size={15} />
-              </button>
-            </div>
-
-            {/* Worker Entry Point */}
-            <div className="entry-card worker-entry-card">
-              <div className="entry-badge worker-badge">
-                <Users size={14} />
-                <span>For Skilled Professionals</span>
-              </div>
-              <h3 className="entry-title">Are You a Skilled Professional?</h3>
-              <p className="entry-desc">
-                Expand your customer reach, showcase your trade expertise, and receive genuine local
-                service booking leads directly on your phone.
-              </p>
-              <ul className="entry-points-list">
-                <li><Check size={16} color="#C8A96A" /> Direct neighborhood booking opportunities</li>
-                <li><Check size={16} color="#C8A96A" /> Flexible availability and work schedule controls</li>
-                <li><Check size={16} color="#C8A96A" /> Professional trade profile with verified skills</li>
-              </ul>
-              <button
-                className="landing-btn-outline dark-outline"
-                onClick={() => {
-                  setWorkerSubmitted(false);
-                  setWorkerModalOpen(true);
-                }}
-                id="worker-register-btn"
-              >
-                <span>Register as a Professional</span>
-                <ArrowRight size={15} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* =========================================================================
-          7. FAQ SECTION (Accordion)
-          ========================================================================= */}
-      <section className="landing-section landing-section-sage">
+      <section id="about-us" className="landing-section landing-section-sage">
         <div className="landing-container">
           <div style={{ textAlign: "center", maxWidth: "680px", margin: "0 auto 3rem" }}>
             <div className="landing-eyebrow" style={{ justifyContent: "center" }}>
-              <span>• FREQUENTLY ASKED QUESTIONS</span>
+              <span>• VERIFIED CUSTOMER PERSPECTIVES</span>
             </div>
             <h2 className="landing-section-title" style={{ textAlign: "center" }}>
-              Clear Answers to Common Questions
+              Better Service Starts With Clear Expectations.
             </h2>
             <p className="landing-section-sub" style={{ margin: "0.75rem auto 0", textAlign: "center" }}>
-              Everything you need to know about how WorkSphere AI operates, service verification, and booking.
+              See how everyday households and trade professionals coordinate smoothly through WorkSphere AI.
             </p>
           </div>
 
-          <div className="faq-container">
-            {faqList.map((faq, idx) => {
-              const isOpen = activeFaq === idx;
-              return (
-                <div key={idx} className={`faq-item ${isOpen ? "open" : ""}`}>
-                  <button
-                    className="faq-question-btn"
-                    onClick={() => setActiveFaq(isOpen ? null : idx)}
-                    aria-expanded={isOpen}
-                  >
-                    <span>{faq.q}</span>
-                    <div className="faq-toggle-icon">
-                      {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                    </div>
-                  </button>
-                  {isOpen && (
-                    <div className="faq-answer-panel">
-                      <p>{faq.a}</p>
-                    </div>
-                  )}
+          <div className="testimonials-grid">
+            <div className="testimonial-card">
+              <div className="testimonial-rating">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} size={16} fill="#D6B779" />
+                ))}
+              </div>
+              <p className="testimonial-text">
+                “Booking an electrician for my apartment used to take days of phone tags. With WorkSphere,
+                a master electrician arrived within 2 hours with clear upfront quotes.”
+              </p>
+              <div className="testimonial-author">
+                <img
+                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80"
+                  alt="Ananya Sharma"
+                  className="testimonial-avatar"
+                />
+                <div>
+                  <div className="testimonial-name">Ananya Sharma</div>
+                  <div className="testimonial-role">Homeowner, Guntur</div>
                 </div>
-              );
-            })}
+              </div>
+            </div>
+
+            <div className="testimonial-card">
+              <div className="testimonial-rating">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} size={16} fill="#D6B779" />
+                ))}
+              </div>
+              <p className="testimonial-text">
+                “As a carpenter with 12 years of experience, this portal has brought steady, legitimate
+                leads from nearby gated communities right to my phone.”
+              </p>
+              <div className="testimonial-author">
+                <img
+                  src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80"
+                  alt="Koteswara Rao"
+                  className="testimonial-avatar"
+                />
+                <div>
+                  <div className="testimonial-name">Koteswara Rao</div>
+                  <div className="testimonial-role">Woodworker & Polisher</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="testimonial-card">
+              <div className="testimonial-rating">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} size={16} fill="#D6B779" />
+                ))}
+              </div>
+              <p className="testimonial-text">
+                “Transparent pricing and no hidden commission surprises. The booking tracking gave me
+                total confidence about the technician’s arrival time.”
+              </p>
+              <div className="testimonial-author">
+                <img
+                  src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80"
+                  alt="Venkat Reddy"
+                  className="testimonial-avatar"
+                />
+                <div>
+                  <div className="testimonial-name">Venkat Reddy</div>
+                  <div className="testimonial-role">Resident, Vijayawada</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* =========================================================================
-          8. CONTACT SECTION & FINAL CTA
+          9. FINAL CALL TO ACTION
           ========================================================================= */}
-      <section id="contact" className="landing-final-cta">
+      <section className="landing-final-cta">
         <div className="landing-container landing-cta-content">
-          <div>
-            <div className="landing-eyebrow" style={{ justifyContent: "center", color: "#C8A96A" }}>
-              <span>• GET IN TOUCH</span>
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+          >
+            <div className="landing-eyebrow" style={{ justifyContent: "center", color: "#D6B779" }}>
+              <span>• READY TO GET STARTED?</span>
             </div>
             <h2 className="landing-cta-headline">
-              Ready to Experience Simpler Home Services?
+              Whatever the Job, Start With the Right Connection.
             </h2>
             <p className="landing-cta-sub">
-              Whether you need a reliable repair professional or want to offer your trade skills,
-              WorkSphere AI is built for trustworthy collaboration.
+              Discover skilled professionals or bring your expertise to a platform designed
+              around better service experiences.
             </p>
             <div className="landing-cta-buttons">
               <button
                 className="landing-btn-gold"
-                onClick={() => scrollToSection("services")}
+                style={{ padding: "12px 28px", fontSize: "1rem" }}
+                onClick={() => setShowLoginModal(true)}
               >
-                <span>Find a Service</span>
+                <span>Find a Worker</span>
                 <ArrowRight size={17} />
               </button>
               <button
                 className="landing-btn-outline"
-                onClick={() => {
-                  setContactSubmitted(false);
-                  setContactModalOpen(true);
-                }}
+                style={{ padding: "12px 28px", fontSize: "1rem" }}
+                onClick={() => navigate("/worker/register")}
               >
-                <Mail size={16} />
-                <span>Contact Inquiries</span>
+                <span>Join as a Professional</span>
               </button>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
       {/* =========================================================================
-          9. PROFESSIONAL FOOTER
+          10. PREMIUM FOOTER
           ========================================================================= */}
       <footer className="landing-footer">
         <div className="landing-container">
@@ -1035,536 +1110,611 @@ export default function HomePage({ initialSection = null, initialModal = null, o
                 <span className="landing-brand-title">WorkSphere AI</span>
               </div>
               <p className="landing-footer-tagline">
-                Trusted Home Services, Made Simple. Connecting local households with qualified, verified
-                service professionals across Andhra Pradesh.
+                Every Skill. Every Service. One Smart Platform.
+                Bridging local homes with verified skilled professionals across Andhra Pradesh.
               </p>
-              <div className="footer-location-badges">
-                <span className="footer-pill">Guntur</span>
-                <span className="footer-pill">Vijayawada</span>
-                <span className="footer-pill">Tenali</span>
-                <span className="footer-pill">Amaravati</span>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <span style={{ fontSize: "0.75rem", background: "rgba(255,255,255,0.08)", padding: "4px 8px", borderRadius: "6px", color: "#D6B779" }}>
+                  Guntur
+                </span>
+                <span style={{ fontSize: "0.75rem", background: "rgba(255,255,255,0.08)", padding: "4px 8px", borderRadius: "6px", color: "#D6B779" }}>
+                  Vijayawada
+                </span>
+                <span style={{ fontSize: "0.75rem", background: "rgba(255,255,255,0.08)", padding: "4px 8px", borderRadius: "6px", color: "#D6B779" }}>
+                  Amaravati
+                </span>
               </div>
             </div>
 
-            {/* Quick Navigation Links */}
+            {/* Col 1: Explore */}
             <div>
-              <div className="landing-footer-col-title">Navigation</div>
-              <ul className="landing-footer-links">
-                <li><span className="landing-footer-link" onClick={() => scrollToSection("hero")}>Home</span></li>
-                <li><span className="landing-footer-link" onClick={() => scrollToSection("services")}>Services</span></li>
-                <li><span className="landing-footer-link" onClick={() => scrollToSection("how-it-works")}>How It Works</span></li>
-                <li><span className="landing-footer-link" onClick={() => scrollToSection("why-worksphere")}>About WorkSphere AI</span></li>
-                <li><span className="landing-footer-link" onClick={() => scrollToSection("contact")}>Contact Us</span></li>
-              </ul>
-            </div>
-
-            {/* Service Directory Links */}
-            <div>
-              <div className="landing-footer-col-title">Service Disciplines</div>
+              <div className="landing-footer-col-title">Explore Services</div>
               <ul className="landing-footer-links">
                 <li><span className="landing-footer-link" onClick={() => scrollToSection("services")}>Plumbing Repairs</span></li>
-                <li><span className="landing-footer-link" onClick={() => scrollToSection("services")}>Electrical Services</span></li>
-                <li><span className="landing-footer-link" onClick={() => scrollToSection("services")}>Deep Cleaning</span></li>
-                <li><span className="landing-footer-link" onClick={() => scrollToSection("services")}>Carpentry & Woodwork</span></li>
-                <li><span className="landing-footer-link" onClick={() => scrollToSection("services")}>Painting & Primer</span></li>
-                <li><span className="landing-footer-link" onClick={() => scrollToSection("services")}>Appliance & AC Repair</span></li>
-                <li><span className="landing-footer-link" onClick={() => scrollToSection("services")}>Pest Control</span></li>
+                <li><span className="landing-footer-link" onClick={() => scrollToSection("services")}>Electrical Diagnostics</span></li>
+                <li><span className="landing-footer-link" onClick={() => scrollToSection("services")}>Custom Carpentry</span></li>
+                <li><span className="landing-footer-link" onClick={() => scrollToSection("services")}>Interior Painting</span></li>
+                <li><span className="landing-footer-link" onClick={() => scrollToSection("services")}>Deep Sanitization</span></li>
               </ul>
             </div>
 
-            {/* Support & Contact */}
+            {/* Col 2: For Workers */}
             <div>
-              <div className="landing-footer-col-title">Support & Portals</div>
+              <div className="landing-footer-col-title">For Workers</div>
               <ul className="landing-footer-links">
-                <li>
-                  <span
-                    className="landing-footer-link"
-                    onClick={() => {
-                      setAuthRoleTab("customer");
-                      setAuthModalOpen(true);
-                    }}
-                  >
-                    Customer Sign In
-                  </span>
-                </li>
-                <li>
-                  <span
-                    className="landing-footer-link"
-                    onClick={() => {
-                      setAuthRoleTab("worker");
-                      setAuthModalOpen(true);
-                    }}
-                  >
-                    Worker Sign In
-                  </span>
-                </li>
-                <li>
-                  <span
-                    className="landing-footer-link"
-                    onClick={() => {
-                      setWorkerSubmitted(false);
-                      setWorkerModalOpen(true);
-                    }}
-                  >
-                    Become a Worker
-                  </span>
-                </li>
-                <li>
-                  <span
-                    className="landing-footer-link"
-                    onClick={() => {
-                      setContactSubmitted(false);
-                      setContactModalOpen(true);
-                    }}
-                  >
-                    Support Inquiries
-                  </span>
-                </li>
-                <li><span className="landing-footer-link">support@worksphere.ai</span></li>
+                <li><span className="landing-footer-link" onClick={() => navigate("/worker/register")}>Register as Worker</span></li>
+                <li><span className="landing-footer-link" onClick={() => navigate("/worker/login")}>Worker Portal Login</span></li>
+                <li><span className="landing-footer-link" onClick={() => scrollToSection("how-it-works")}>How It Works</span></li>
+                <li><span className="landing-footer-link" onClick={() => navigate("/worker/dashboard")}>Worker Dashboard</span></li>
+              </ul>
+            </div>
+
+            {/* Col 3: Portals */}
+            <div>
+              <div className="landing-footer-col-title">Account Portals</div>
+              <ul className="landing-footer-links">
+                <li><span className="landing-footer-link" onClick={() => navigate("/customer/login")}>Customer Sign In</span></li>
+                <li><span className="landing-footer-link" onClick={() => navigate("/worker/login")}>Worker Sign In</span></li>
+                <li><span className="landing-footer-link" onClick={() => navigate("/admin/login")}>Admin Portal</span></li>
+                <li><span className="landing-footer-link" onClick={() => navigate("/customer/dashboard")}>Customer Dashboard</span></li>
+              </ul>
+            </div>
+
+            {/* Col 4: Trust & Support */}
+            <div>
+              <div className="landing-footer-col-title">Trust & Help</div>
+              <ul className="landing-footer-links">
+                <li><span className="landing-footer-link">Biometric Auditing</span></li>
+                <li><span className="landing-footer-link">Upfront Quotes</span></li>
+                <li><span className="landing-footer-link">Privacy Policy</span></li>
+                <li><span className="landing-footer-link">Terms of Service</span></li>
+                <li><span className="landing-footer-link">Contact Support</span></li>
               </ul>
             </div>
           </div>
 
           <div className="landing-footer-bottom">
-            <div>© {new Date().getFullYear()} WorkSphere AI. All rights reserved. Step 2 Complete Website Design.</div>
+            <div>© {new Date().getFullYear()} WorkSphere AI Marketplace Inc. All rights reserved.</div>
             <div style={{ display: "flex", gap: "1.5rem" }}>
-              <span className="landing-footer-link">Privacy Policy</span>
-              <span className="landing-footer-link">Terms of Service</span>
-              <span className="landing-footer-link">Verification Standards</span>
+              <span className="landing-footer-link">Privacy</span>
+              <span className="landing-footer-link">Terms</span>
+              <span className="landing-footer-link">Security</span>
             </div>
           </div>
         </div>
       </footer>
 
-      {/* =========================================================================
-          INTERACTIVE MODALS
-          ========================================================================= */}
-
-      {/* 1. Sign In / Authentication Modal */}
-      {/* 1. Sign In / 3 Login Cards Modal */}
-      {authModalOpen && (
-        <div className="modal-backdrop" onClick={() => setAuthModalOpen(false)}>
-          <div className="modal-card wide-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <div className="modal-badge-icon">
-                  <Sparkles size={20} color="#C8A96A" />
-                </div>
-                <div>
-                  <h3 className="modal-title">Sign In to WorkSphere AI</h3>
-                  <p className="modal-subtitle">Choose your role to open your dedicated dashboard</p>
-                </div>
-              </div>
-              <button
-                className="modal-close-btn"
-                onClick={() => setAuthModalOpen(false)}
-                aria-label="Close dialog"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* 3 Arranged Login Cards */}
-            <div className="modal-auth-cards-grid">
-              {/* Card 1: Customer */}
-              <div className="modal-auth-card">
-                <div className="modal-auth-card-icon user-icon">
-                  <User size={26} />
-                </div>
-                <div className="modal-auth-card-badge">STEP 3 DASHBOARD</div>
-                <h4 className="modal-auth-card-title">Customer Login</h4>
-                <p className="modal-auth-card-desc">
-                  Browse 50 categories, book verified trade specialists, and track jobs in real time.
-                </p>
-                <div className="modal-auth-card-actions">
-                  <button
-                    className="landing-btn-gold w-full text-sm"
-                    onClick={() => {
-                      setAuthModalOpen(false);
-                      if (onSelectRole) onSelectRole("customer");
-                      else navigate("/customer/dashboard");
-                    }}
-                  >
-                    <span>Open Customer Dashboard</span>
-                    <ArrowRight size={14} />
-                  </button>
-                  <button
-                    className="modal-auth-sub-btn"
-                    onClick={() => {
-                      setAuthModalOpen(false);
-                      navigate("/customer/login");
-                    }}
-                  >
-                    Customer Sign In Form →
-                  </button>
-                </div>
-              </div>
-
-              {/* Card 2: Worker */}
-              <div className="modal-auth-card worker">
-                <div className="modal-auth-card-icon worker-icon">
-                  <Briefcase size={26} />
-                </div>
-                <div className="modal-auth-card-badge gold-badge">STEP 4 DASHBOARD</div>
-                <h4 className="modal-auth-card-title">Worker Login</h4>
-                <p className="modal-auth-card-desc">
-                  Receive local customer booking leads, accept or reject jobs, and update work status.
-                </p>
-                <div className="modal-auth-card-actions">
-                  <button
-                    className="landing-btn-gold w-full text-sm"
-                    onClick={() => {
-                      setAuthModalOpen(false);
-                      if (onSelectRole) onSelectRole("worker");
-                      else navigate("/worker/dashboard");
-                    }}
-                  >
-                    <span>Open Worker Dashboard</span>
-                    <ArrowRight size={14} />
-                  </button>
-                  <button
-                    className="modal-auth-sub-btn"
-                    onClick={() => {
-                      setAuthModalOpen(false);
-                      navigate("/worker/login");
-                    }}
-                  >
-                    Worker Sign In Form →
-                  </button>
-                </div>
-              </div>
-
-              {/* Card 3: Admin */}
-              <div className="modal-auth-card">
-                <div className="modal-auth-card-icon admin-icon">
-                  <Shield size={26} color="#C8A96A" />
-                </div>
-                <div className="modal-auth-card-badge gold-badge">STEP 5 DASHBOARD</div>
-                <h4 className="modal-auth-card-title">Admin Login</h4>
-                <p className="modal-auth-card-desc">
-                  Platform governance, worker application reviews, database bookings, and service catalog.
-                </p>
-                <div className="modal-auth-card-actions">
-                  <button
-                    className="landing-btn-gold w-full text-sm"
-                    onClick={() => {
-                      setAuthModalOpen(false);
-                      if (onSelectRole) onSelectRole("admin");
-                      else navigate("/admin/dashboard");
-                    }}
-                  >
-                    <span>Open Admin Dashboard</span>
-                    <ArrowRight size={14} />
-                  </button>
-                  <button
-                    className="modal-auth-sub-btn"
-                    onClick={() => {
-                      setAuthModalOpen(false);
-                      navigate("/admin/login");
-                    }}
-                  >
-                    Admin Sign In Form →
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ textAlign: "center", paddingTop: "0.5rem" }}>
-              <button
-                type="button"
-                className="modal-auth-sub-btn"
-                style={{ fontSize: "0.84rem", color: "#5A6D65" }}
-                onClick={() => {
-                  setAuthModalOpen(false);
-                  navigate("/login");
-                }}
-              >
-                Or view the full standalone 3-Portal selection screen →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 2. Become a Worker Modal */}
-      {workerModalOpen && (
-        <div className="modal-backdrop" onClick={() => setWorkerModalOpen(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div className="modal-badge-icon">
-                  <Award size={18} color="#C8A96A" />
-                </div>
-                <div>
-                  <h3 className="modal-title">Join as a Service Professional</h3>
-                  <p className="modal-subtitle">Register your trade interest</p>
-                </div>
-              </div>
-              <button
-                className="modal-close-btn"
-                onClick={() => setWorkerModalOpen(false)}
-                aria-label="Close dialog"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {workerSubmitted ? (
-              <div style={{ padding: "1.5rem 0", textAlign: "center" }}>
-                <div style={{ width: "50px", height: "50px", borderRadius: "50%", background: "#E9EFE9", display: "grid", placeItems: "center", margin: "0 auto 1rem", color: "#347B63" }}>
-                  <Check size={24} />
-                </div>
-                <h4 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#142D27", marginBottom: "0.5rem" }}>
-                  Application Interest Received!
-                </h4>
-                <p style={{ fontSize: "0.85rem", color: "#5A6D65", lineHeight: 1.6, maxWidth: "340px", margin: "0 auto 1.5rem" }}>
-                  Thank you, <strong>{workerForm.name || "Technician"}</strong>. Worker registration and document verification
-                  will officially open in Step 3 (Supabase Integration).
-                </p>
-                <button
-                  className="landing-btn-gold"
-                  onClick={() => setWorkerModalOpen(false)}
-                >
-                  Close Window
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleWorkerFormSubmit} className="modal-form">
-                <div>
-                  <label className="modal-label">Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter your full name"
-                    value={workerForm.name}
-                    onChange={(e) => setWorkerForm({ ...workerForm, name: e.target.value })}
-                    className="modal-input"
-                  />
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <div>
-                    <label className="modal-label">Primary Trade</label>
-                    <select
-                      value={workerForm.trade}
-                      onChange={(e) => setWorkerForm({ ...workerForm, trade: e.target.value })}
-                      className="modal-input"
-                    >
-                      <option value="Plumbing">Plumbing</option>
-                      <option value="Electrical">Electrical</option>
-                      <option value="Carpentry">Carpentry</option>
-                      <option value="Cleaning">Cleaning</option>
-                      <option value="Painting">Painting</option>
-                      <option value="Appliance Repair">Appliance Repair</option>
-                      <option value="AC Services">AC Services</option>
-                      <option value="Pest Control">Pest Control</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="modal-label">City</label>
-                    <select
-                      value={workerForm.city}
-                      onChange={(e) => setWorkerForm({ ...workerForm, city: e.target.value })}
-                      className="modal-input"
-                    >
-                      <option value="Guntur">Guntur</option>
-                      <option value="Vijayawada">Vijayawada</option>
-                      <option value="Tenali">Tenali</option>
-                      <option value="Amaravati">Amaravati</option>
-                      <option value="Mangalagiri">Mangalagiri</option>
-                      <option value="Hyderabad">Hyderabad</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="modal-label">Phone Number</label>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="e.g. 9876543210"
-                    value={workerForm.phone}
-                    onChange={(e) => setWorkerForm({ ...workerForm, phone: e.target.value })}
-                    className="modal-input"
-                  />
-                </div>
-
-                <div className="modal-info-box" style={{ margin: "4px 0" }}>
-                  <div style={{ fontSize: "0.78rem", color: "#5A6D65" }}>
-                    WorkSphere AI connects verified technicians directly with local customer leads. Full worker portal onboarding goes live in Step 3.
-                  </div>
-                </div>
-
-                <button type="submit" className="landing-btn-gold w-full" style={{ marginTop: "8px" }}>
-                  <span>Submit Worker Interest</span>
-                  <ArrowRight size={15} />
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 3. Service Scope Preview Modal */}
-      {serviceModalData && (
-        <div className="modal-backdrop" onClick={() => setServiceModalData(null)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div className="modal-badge-icon">
-                  {React.createElement(serviceModalData.icon, { size: 18, color: "#C8A96A" })}
-                </div>
-                <div>
-                  <h3 className="modal-title">{serviceModalData.title}</h3>
-                  <p className="modal-subtitle">Service Discipline Overview</p>
-                </div>
-              </div>
-              <button
-                className="modal-close-btn"
-                onClick={() => setServiceModalData(null)}
-                aria-label="Close dialog"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <p style={{ fontSize: "0.9rem", color: "#5A6D65", lineHeight: 1.6, marginBottom: "1.25rem" }}>
-              {serviceModalData.desc}
-            </p>
-
-            <div style={{ fontWeight: 700, fontSize: "0.85rem", color: "#142D27", marginBottom: "8px" }}>
-              Key Tasks Included in this Trade:
-            </div>
-            <ul style={{ listStyle: "none", padding: 0, margin: "0 0 1.5rem", display: "flex", flexDirection: "column", gap: "8px" }}>
-              {serviceModalData.scope.map((task, i) => (
-                <li key={i} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.84rem", color: "#243B33" }}>
-                  <CheckCircle2 size={16} color="#347B63" style={{ flexShrink: 0 }} />
-                  <span>{task}</span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="modal-footer" style={{ display: "flex", gap: "10px" }}>
-              <button
-                className="landing-btn-outline w-full"
-                style={{ color: "#142D27", borderColor: "rgba(20, 45, 39, 0.2)", background: "#FFFFFF" }}
-                onClick={() => setServiceModalData(null)}
-              >
-                Close
-              </button>
-              <button
-                className="landing-btn-gold w-full"
-                onClick={() => {
-                  setServiceModalData(null);
-                  setAuthRoleTab("customer");
-                  setAuthModalOpen(true);
-                }}
-              >
-                Request Service
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Contact Inquiries Modal */}
-      {contactModalOpen && (
-        <div className="modal-backdrop" onClick={() => setContactModalOpen(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div className="modal-badge-icon">
-                  <Mail size={18} color="#C8A96A" />
-                </div>
-                <div>
-                  <h3 className="modal-title">Contact Support & Inquiries</h3>
-                  <p className="modal-subtitle">We are here to assist you</p>
-                </div>
-              </div>
-              <button
-                className="modal-close-btn"
-                onClick={() => setContactModalOpen(false)}
-                aria-label="Close dialog"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {contactSubmitted ? (
-              <div style={{ padding: "1.5rem 0", textAlign: "center" }}>
-                <div style={{ width: "50px", height: "50px", borderRadius: "50%", background: "#E9EFE9", display: "grid", placeItems: "center", margin: "0 auto 1rem", color: "#347B63" }}>
-                  <Check size={24} />
-                </div>
-                <h4 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#142D27", marginBottom: "0.5rem" }}>
-                  Inquiry Transmitted!
-                </h4>
-                <p style={{ fontSize: "0.85rem", color: "#5A6D65", lineHeight: 1.6, maxWidth: "340px", margin: "0 auto 1.5rem" }}>
-                  Thank you for reaching out to WorkSphere AI. Our customer experience team responds within 24 operational hours.
-                </p>
-                <button
-                  className="landing-btn-gold"
-                  onClick={() => setContactModalOpen(false)}
-                >
-                  Close Window
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleContactFormSubmit} className="modal-form">
-                <div>
-                  <label className="modal-label">Your Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter your name"
-                    value={contactForm.name}
-                    onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
-                    className="modal-input"
-                  />
-                </div>
-                <div>
-                  <label className="modal-label">Email Address</label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="name@domain.com"
-                    value={contactForm.email}
-                    onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                    className="modal-input"
-                  />
-                </div>
-                <div>
-                  <label className="modal-label">Message or Question</label>
-                  <textarea
-                    rows={4}
-                    required
-                    placeholder="Tell us about your service or partnership question..."
-                    value={contactForm.message}
-                    onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-                    className="modal-input"
-                    style={{ resize: "vertical" }}
-                  />
-                </div>
-                <button type="submit" className="landing-btn-gold w-full" style={{ marginTop: "8px" }}>
-                  <span>Transmit Inquiry</span>
-                  <Send size={15} />
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Floating Back to Top Button */}
+      {/* Floating Back-to-Top Button */}
       {showBackToTop && (
         <button
           className="back-to-top-btn"
           onClick={scrollToTop}
           aria-label="Back to top"
         >
-          <ChevronUp size={20} />
+          <ChevronUp size={22} />
         </button>
       )}
+
+      {/* =========================================================================
+          INTERACTIVE 3-ROLE LOGIN SELECTION MODAL
+          ========================================================================= */}
+      <AnimatePresence>
+        {showLoginModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowLoginModal(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(11, 34, 27, 0.78)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              zIndex: 99999,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "1.25rem",
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 25 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 25 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#FFFFFF",
+                borderRadius: "24px",
+                maxWidth: "1020px",
+                width: "100%",
+                padding: "2.5rem 2rem",
+                boxShadow: "0 30px 60px -15px rgba(11, 34, 27, 0.45)",
+                position: "relative",
+                border: "1.5px solid rgba(214, 183, 121, 0.4)",
+                maxHeight: "92vh",
+                overflowY: "auto",
+              }}
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setShowLoginModal(false)}
+                aria-label="Close modal"
+                style={{
+                  position: "absolute",
+                  top: "1.25rem",
+                  right: "1.25rem",
+                  background: "#F1F5F9",
+                  border: "none",
+                  width: "38px",
+                  height: "38px",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "#475569",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#E2E8F0";
+                  e.currentTarget.style.color = "#0F172A";
+                  e.currentTarget.style.transform = "rotate(90deg)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#F1F5F9";
+                  e.currentTarget.style.color = "#475569";
+                  e.currentTarget.style.transform = "rotate(0deg)";
+                }}
+              >
+                <X size={18} />
+              </button>
+
+              {/* Title Section */}
+              <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: "rgba(214, 183, 121, 0.16)",
+                    color: "#9A7328",
+                    padding: "5px 16px",
+                    borderRadius: "9999px",
+                    fontSize: "0.75rem",
+                    fontWeight: 800,
+                    letterSpacing: "0.06em",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  <Sparkles size={14} color="#9A7328" />
+                  <span>{isEn ? "3 DEDICATED PORTALS" : "3 ప్రత్యేక పోర్టల్స్"}</span>
+                </div>
+                <h2
+                  style={{
+                    fontSize: "2rem",
+                    fontWeight: 800,
+                    color: "#0B221B",
+                    margin: "0 0 0.5rem 0",
+                    fontFamily: "'Playfair Display', Georgia, serif",
+                  }}
+                >
+                  {isEn ? "Choose Your Login Portal" : "మీ లాగిన్ పోర్టల్‌ను ఎంచుకోండి"}
+                </h2>
+                <p
+                  style={{
+                    fontSize: "0.95rem",
+                    color: "#64748B",
+                    margin: 0,
+                    maxWidth: "580px",
+                    marginLeft: "auto",
+                    marginRight: "auto",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {isEn
+                    ? "Select your role below. Each login opens only its dedicated, protected dashboard."
+                    : "క్రింద ఉన్న మీ పాత్రను ఎంచుకోండి. ప్రతి లాగిన్ దాని స్వంత డాష్‌బోర్డ్‌ను మాత్రమే తెరుస్తుంది."}
+                </p>
+              </div>
+
+              {/* 3 Selectable Cards Grid */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                  gap: "1.5rem",
+                  marginBottom: "1.75rem",
+                }}
+              >
+                {/* 1. Customer Login */}
+                <div
+                  style={{
+                    background: "linear-gradient(180deg, #F0FDF4 0%, #FFFFFF 100%)",
+                    border: "2px solid #BBF7D0",
+                    borderRadius: "18px",
+                    padding: "1.75rem 1.5rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    textAlign: "center",
+                    boxShadow: "0 4px 14px rgba(34, 197, 94, 0.08)",
+                    transition: "all 0.25s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "#16A34A";
+                    e.currentTarget.style.transform = "translateY(-4px)";
+                    e.currentTarget.style.boxShadow = "0 12px 24px -6px rgba(22, 163, 74, 0.2)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "#BBF7D0";
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "0 4px 14px rgba(34, 197, 94, 0.08)";
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "60px",
+                      height: "60px",
+                      borderRadius: "50%",
+                      background: "linear-gradient(135deg, #10B981 0%, #047857 100%)",
+                      color: "#FFFFFF",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginBottom: "1rem",
+                      boxShadow: "0 6px 14px rgba(16, 185, 129, 0.3)",
+                    }}
+                  >
+                    <User size={30} strokeWidth={2.4} />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 800,
+                      color: "#15803D",
+                      background: "#DCFCE7",
+                      padding: "3px 10px",
+                      borderRadius: "9999px",
+                      letterSpacing: "0.05em",
+                      marginBottom: "0.5rem",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {isEn ? "Customer" : "కస్టమర్"}
+                  </span>
+                  <h3
+                    style={{
+                      fontSize: "1.3rem",
+                      fontWeight: 800,
+                      color: "#0B221B",
+                      margin: "0 0 0.5rem 0",
+                    }}
+                  >
+                    {isEn ? "Customer Login" : "కస్టమర్ లాగిన్"}
+                  </h3>
+                  <p
+                    style={{
+                      fontSize: "0.85rem",
+                      color: "#475569",
+                      lineHeight: 1.5,
+                      margin: "0 0 1.25rem 0",
+                      flex: 1,
+                    }}
+                  >
+                    {isEn
+                      ? "Find & hire verified workers, book services by category, and track progress."
+                      : "ధృవీకరించబడిన కార్మికులను కనుగొనండి, బుకింగ్‌లను నిర్వహించండి."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLoginModal(false);
+                      navigate("/customer/login");
+                    }}
+                    style={{
+                      width: "100%",
+                      background: "#047857",
+                      color: "#FFFFFF",
+                      border: "none",
+                      borderRadius: "10px",
+                      padding: "11px 18px",
+                      fontSize: "0.88rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      boxShadow: "0 4px 10px rgba(4, 120, 87, 0.25)",
+                      transition: "background 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#065F46"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#047857"; }}
+                  >
+                    <span>{isEn ? "Open Customer Login" : "కస్టమర్ లాగిన్ తెరవండి"}</span>
+                    <ArrowRight size={15} />
+                  </button>
+                </div>
+
+                {/* 2. Worker Login */}
+                <div
+                  style={{
+                    background: "linear-gradient(180deg, #FEFCE8 0%, #FFFFFF 100%)",
+                    border: "2px solid #FDE68A",
+                    borderRadius: "18px",
+                    padding: "1.75rem 1.5rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    textAlign: "center",
+                    boxShadow: "0 4px 14px rgba(217, 119, 6, 0.08)",
+                    transition: "all 0.25s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "#D97706";
+                    e.currentTarget.style.transform = "translateY(-4px)";
+                    e.currentTarget.style.boxShadow = "0 12px 24px -6px rgba(217, 119, 6, 0.2)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "#FDE68A";
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "0 4px 14px rgba(217, 119, 6, 0.08)";
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "60px",
+                      height: "60px",
+                      borderRadius: "50%",
+                      background: "linear-gradient(135deg, #D97706 0%, #B45309 100%)",
+                      color: "#FFFFFF",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginBottom: "1rem",
+                      boxShadow: "0 6px 14px rgba(217, 119, 6, 0.3)",
+                    }}
+                  >
+                    <Briefcase size={30} strokeWidth={2.4} />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 800,
+                      color: "#B45309",
+                      background: "#FEF3C7",
+                      padding: "3px 10px",
+                      borderRadius: "9999px",
+                      letterSpacing: "0.05em",
+                      marginBottom: "0.5rem",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {isEn ? "Worker / Artisan" : "కార్మికుడు"}
+                  </span>
+                  <h3
+                    style={{
+                      fontSize: "1.3rem",
+                      fontWeight: 800,
+                      color: "#0B221B",
+                      margin: "0 0 0.5rem 0",
+                    }}
+                  >
+                    {isEn ? "Worker Login" : "కార్మికుల లాగిన్"}
+                  </h3>
+                  <p
+                    style={{
+                      fontSize: "0.85rem",
+                      color: "#475569",
+                      lineHeight: 1.5,
+                      margin: "0 0 1.25rem 0",
+                      flex: 1,
+                    }}
+                  >
+                    {isEn
+                      ? "Accept job requests, manage saved skills, and update job status directly."
+                      : "కొత్త పనులను స్వీకరించండి, మీ నైపుణ్యాలను భద్రపరచండి."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLoginModal(false);
+                      navigate("/worker/login");
+                    }}
+                    style={{
+                      width: "100%",
+                      background: "#B45309",
+                      color: "#FFFFFF",
+                      border: "none",
+                      borderRadius: "10px",
+                      padding: "11px 18px",
+                      fontSize: "0.88rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      boxShadow: "0 4px 10px rgba(180, 83, 9, 0.25)",
+                      transition: "background 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#92400E"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#B45309"; }}
+                  >
+                    <span>{isEn ? "Open Worker Login" : "కార్మికుల లాగిన్ తెరవండి"}</span>
+                    <ArrowRight size={15} />
+                  </button>
+                  <div style={{ marginTop: "0.6rem" }}>
+                    <span style={{ fontSize: "0.76rem", color: "#64748B" }}>
+                      {isEn ? "New worker? " : "కొత్త కార్మికులా? "}
+                    </span>
+                    <span
+                      onClick={() => {
+                        setShowLoginModal(false);
+                        navigate("/worker/register");
+                      }}
+                      style={{
+                        fontSize: "0.76rem",
+                        color: "#B45309",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                      }}
+                    >
+                      {isEn ? "Register here →" : "దరఖాస్తు చేసుకోండి →"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Admin Login */}
+                <div
+                  style={{
+                    background: "linear-gradient(180deg, #F1F5F9 0%, #FFFFFF 100%)",
+                    border: "2px solid #CBD5E1",
+                    borderRadius: "18px",
+                    padding: "1.75rem 1.5rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    textAlign: "center",
+                    boxShadow: "0 4px 14px rgba(15, 23, 42, 0.08)",
+                    transition: "all 0.25s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "#0B221B";
+                    e.currentTarget.style.transform = "translateY(-4px)";
+                    e.currentTarget.style.boxShadow = "0 12px 24px -6px rgba(11, 34, 27, 0.25)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "#CBD5E1";
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "0 4px 14px rgba(15, 23, 42, 0.08)";
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "60px",
+                      height: "60px",
+                      borderRadius: "50%",
+                      background: "linear-gradient(135deg, #0B221B 0%, #1A3E32 100%)",
+                      color: "#D6B779",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginBottom: "1rem",
+                      boxShadow: "0 6px 14px rgba(11, 34, 27, 0.35)",
+                      border: "1px solid rgba(214, 183, 121, 0.4)",
+                    }}
+                  >
+                    <ShieldCheck size={30} strokeWidth={2.4} />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 800,
+                      color: "#0B221B",
+                      background: "rgba(214, 183, 121, 0.25)",
+                      padding: "3px 10px",
+                      borderRadius: "9999px",
+                      letterSpacing: "0.05em",
+                      marginBottom: "0.5rem",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {isEn ? "Administrator" : "నిర్వాహకుడు"}
+                  </span>
+                  <h3
+                    style={{
+                      fontSize: "1.3rem",
+                      fontWeight: 800,
+                      color: "#0B221B",
+                      margin: "0 0 0.5rem 0",
+                    }}
+                  >
+                    {isEn ? "Admin Login" : "అడ్మిన్ లాగిన్"}
+                  </h3>
+                  <p
+                    style={{
+                      fontSize: "0.85rem",
+                      color: "#475569",
+                      lineHeight: 1.5,
+                      margin: "0 0 1.25rem 0",
+                      flex: 1,
+                    }}
+                  >
+                    {isEn
+                      ? "Approve worker applications, review marketplace jobs, and supervise platform analytics."
+                      : "కార్మికుల దరఖాస్తులు మరియు ప్లాట్‌ఫారమ్‌ను నిర్వహించండి."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLoginModal(false);
+                      navigate("/admin/login");
+                    }}
+                    style={{
+                      width: "100%",
+                      background: "#0B221B",
+                      color: "#FFFFFF",
+                      border: "none",
+                      borderRadius: "10px",
+                      padding: "11px 18px",
+                      fontSize: "0.88rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      boxShadow: "0 4px 10px rgba(11, 34, 27, 0.3)",
+                      transition: "background 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#142D27"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#0B221B"; }}
+                  >
+                    <span>{isEn ? "Open Admin Login" : "అడ్మిన్ లాగిన్ తెరవండి"}</span>
+                    <ArrowRight size={15} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Bottom Row: Full page link */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: "6px",
+                  paddingTop: "0.75rem",
+                  borderTop: "1px solid #F1F5F9",
+                }}
+              >
+                <span style={{ fontSize: "0.82rem", color: "#64748B" }}>
+                  {isEn ? "Prefer full-screen role selection?" : "పూర్తి పేజీ కావాలా?"}
+                </span>
+                <span
+                  onClick={() => {
+                    setShowLoginModal(false);
+                    navigate("/login");
+                  }}
+                  style={{
+                    fontSize: "0.82rem",
+                    color: "#0284C7",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                  }}
+                >
+                  {isEn ? "View all roles on dedicated page →" : "రోల్స్ పేజీకి వెళ్లండి →"}
+                </span>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

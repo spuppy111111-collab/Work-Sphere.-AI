@@ -49,6 +49,18 @@ export default function Topbar({
 
   useEffect(() => {
     fetchNotifications();
+
+    const handleUpdate = () => {
+      fetchNotifications();
+    };
+
+    window.addEventListener("ws_booking_updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+
+    return () => {
+      window.removeEventListener("ws_booking_updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
   }, [currentUser?.id]);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
@@ -229,26 +241,28 @@ export default function Topbar({
             }}
           >
             <Bell size={18} />
-            <span
-              style={{
-                position: "absolute",
-                top: "-2px",
-                right: "-2px",
-                background: "#ef4444",
-                color: "#ffffff",
-                fontSize: "0.65rem",
-                fontWeight: "700",
-                width: "16px",
-                height: "16px",
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                border: "2px solid #ffffff",
-              }}
-            >
-              3
-            </span>
+            {unreadCount > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: "-2px",
+                  right: "-2px",
+                  background: "#ef4444",
+                  color: "#ffffff",
+                  fontSize: "0.65rem",
+                  fontWeight: "700",
+                  width: "16px",
+                  height: "16px",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "2px solid #ffffff",
+                }}
+              >
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
 
           {isNotifOpen && (
@@ -267,7 +281,7 @@ export default function Topbar({
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-                <b style={{ fontSize: "0.9rem", color: "#0f172a" }}>Notifications</b>
+                <b style={{ fontSize: "0.9rem", color: "#0f172a" }}>Notifications ({notifications.length})</b>
                 <button
                   onClick={() => setIsNotifOpen(false)}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}
@@ -276,19 +290,29 @@ export default function Topbar({
                 </button>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <div style={{ padding: "8px 10px", borderRadius: "8px", background: "#ecfeff", borderLeft: "3px solid #0891b2" }}>
-                  <b style={{ fontSize: "0.8rem", color: "#0f172a", display: "block" }}>New worker application</b>
-                  <span style={{ fontSize: "0.75rem", color: "#475569" }}>Ravi Kumar (Plumber) submitted verification</span>
-                </div>
-                <div style={{ padding: "8px 10px", borderRadius: "8px", background: "#f8fafc" }}>
-                  <b style={{ fontSize: "0.8rem", color: "#0f172a", display: "block" }}>Booking completed</b>
-                  <span style={{ fontSize: "0.75rem", color: "#475569" }}>#BK-1024 - Electrical Work marked complete</span>
-                </div>
-                <div style={{ padding: "8px 10px", borderRadius: "8px", background: "#f8fafc" }}>
-                  <b style={{ fontSize: "0.8rem", color: "#0f172a", display: "block" }}>New customer registered</b>
-                  <span style={{ fontSize: "0.75rem", color: "#475569" }}>sai@domain.com registered as customer</span>
-                </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "320px", overflowY: "auto" }}>
+                {notifications.length === 0 ? (
+                  <div style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontSize: "0.8rem" }}>
+                    No notifications yet
+                  </div>
+                ) : (
+                  notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={() => handleNotificationClick(n)}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: "8px",
+                        background: n.is_read ? "#f8fafc" : "#ecfeff",
+                        borderLeft: n.is_read ? "3px solid transparent" : "3px solid #0891b2",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <b style={{ fontSize: "0.8rem", color: "#0f172a", display: "block" }}>{n.title || "Notification"}</b>
+                      <span style={{ fontSize: "0.75rem", color: "#475569" }}>{n.message || n.body}</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}

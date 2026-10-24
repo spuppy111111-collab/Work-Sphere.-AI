@@ -1,15 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
-import { SERVICE_CATEGORIES, SERVICE_GROUPS } from "../data/serviceCatalog";
+import { SERVICE_CATEGORIES, SERVICE_GROUPS } from "../data/serviceCatalog.js";
 
 const supabaseUrl =
-  import.meta.env.VITE_SUPABASE_URL ||
-  import.meta.env.NEXT_PUBLIC_SUPABASE_URL ||
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_URL) ||
+  (typeof import.meta !== "undefined" && import.meta.env?.NEXT_PUBLIC_SUPABASE_URL) ||
+  (typeof process !== "undefined" && process.env?.VITE_SUPABASE_URL) ||
   "https://tclpdmokryqyrnotwzek.supabase.co";
 
 const supabaseKey =
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY) ||
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_ANON_KEY) ||
+  (typeof import.meta !== "undefined" && import.meta.env?.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) ||
+  (typeof process !== "undefined" && process.env?.VITE_SUPABASE_ANON_KEY) ||
   "sb_publishable_KTlYdHTNS1fVPdPV4eGwBw_gwYw_BD1";
 
 if (!supabaseUrl || !supabaseKey) {
@@ -30,6 +32,231 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     detectSessionInUrl: true,
   },
 });
+
+// =========================================================================
+// WORKER REGISTRATION ₹25 UPI PAYMENT CONSTANTS & CONFIGURATION
+// =========================================================================
+export const WORKER_REGISTRATION_FEE_PAISE = 2500; // ₹25 = 2500 paise
+export const WORKER_REGISTRATION_FEE_INR = 25;
+export const WORKER_UPI_ID = "6281376739@fam";
+export const WORKER_UPI_QR_PATH = "/images/worksphere-famx-qr.png";
+
+/**
+ * Fetch existing worker registration payment record for a given worker user ID.
+ */
+export async function getWorkerRegistrationPayment(workerUserId) {
+  if (!workerUserId) return { data: null, error: null };
+  try {
+    const { data, error } = await supabase
+      .from("worker_registration_payments")
+      .select("*")
+      .eq("worker_id", workerUserId)
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === "42P01" || error.message?.includes("schema cache")) {
+        console.warn("worker_registration_payments table not yet created in PostgreSQL schema.");
+        return { data: null, error: null, tableMissing: true };
+      }
+      return { data: null, error };
+    }
+    return { data, error: null };
+  } catch (err) {
+    console.warn("Notice fetching worker registration payment:", err);
+    return { data: null, error: err };
+  }
+}
+
+/**
+ * Submit or re-submit UPI transaction reference for worker registration.
+ * Enforces one-time payment of ₹25 (2500 paise), currency 'INR', method 'manual_upi_famx'.
+ * Prevents duplicate submissions and duplicate transaction references.
+ */
+export async function submitWorkerRegistrationPayment({
+  workerId,
+  transactionReference,
+  receiptUrl = null,
+}) {
+  if (!workerId) {
+    throw new Error("Worker authentication is required to submit payment.");
+  }
+
+  const cleanRef = (transactionReference || "").trim();
+  if (!cleanRef || cleanRef.length < 6) {
+    throw new Error("Please enter a valid UPI transaction reference / UTR (minimum 6 characters).");
+  }
+
+  // 1. Check if a payment record already exists for this worker
+  const { data: existingPayment, error: fetchErr } = await getWorkerRegistrationPayment(workerId);
+  if (fetchErr) {
+    throw new Error(fetchErr.message || "Failed to check existing payment record.");
+  }
+
+  if (existingPayment) {
+    if (existingPayment.payment_status === "verified") {
+      throw new Error("Your registration fee has already been verified.");
+    }
+    if (existingPayment.payment_status === "pending") {
+      throw new Error("Your payment is already pending verification. Please wait for administrator review.");
+    }
+
+    // If status is 'rejected', allow re-submitting with new transaction reference
+    const { data: updated, error: updateErr } = await supabase
+      .from("worker_registration_payments")
+      .update({
+        transaction_reference: cleanRef,
+        receipt_url: receiptUrl || existingPayment.receipt_url || null,
+        payment_status: "pending",
+        rejection_reason: null,
+        verified_at: null,
+        verified_by: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("worker_id", workerId)
+      .select()
+      .single();
+
+    if (updateErr) {
+      if (updateErr.code === "23505" || updateErr.message?.toLowerCase().includes("duplicate")) {
+        throw new Error("This UPI transaction reference has already been submitted by another user. Please check your transaction details.");
+      }
+      throw updateErr;
+    }
+
+    return { data: updated, isResubmission: true };
+  }
+
+  // 2. Insert new one-time payment record
+  const payload = {
+    worker_id: workerId,
+    amount_paise: WORKER_REGISTRATION_FEE_PAISE,
+    currency: "INR",
+    payment_method: "manual_upi_famx",
+    upi_id: WORKER_UPI_ID,
+    transaction_reference: cleanRef,
+    receipt_url: receiptUrl || null,
+    payment_status: "pending",
+  };
+
+  const { data: inserted, error: insertErr } = await supabase
+    .from("worker_registration_payments")
+    .insert([payload])
+    .select()
+    .single();
+
+  if (insertErr) {
+    if (insertErr.code === "23505" || insertErr.message?.toLowerCase().includes("duplicate") || insertErr.message?.toLowerCase().includes("unique")) {
+      if (insertErr.message?.includes("transaction_ref") || insertErr.details?.includes("transaction_ref")) {
+        throw new Error("This UPI transaction reference has already been submitted. Please check your transaction details.");
+      }
+      throw new Error("A registration fee record already exists for this account.");
+    }
+    throw insertErr;
+  }
+
+  return { data: inserted, isResubmission: false };
+}
+
+/**
+ * Admin: Get all worker registration payments with worker profiles and details.
+ */
+export async function getAllWorkerPaymentsForAdmin() {
+  try {
+    const { data: payments, error } = await supabase
+      .from("worker_registration_payments")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      if (error.code === "42P01" || error.message?.includes("schema cache")) {
+        console.warn("worker_registration_payments table not yet created.");
+        return [];
+      }
+      throw error;
+    }
+
+    if (!payments || payments.length === 0) return [];
+
+    // Fetch matching worker profiles and user profiles
+    const workerIds = [...new Set(payments.map((p) => p.worker_id))];
+    const { data: workerProfiles } = await supabase
+      .from("worker_profiles")
+      .select("user_id, display_name, trade, skills, approval_status, city")
+      .in("user_id", workerIds);
+
+    const { data: userProfiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, phone")
+      .in("id", workerIds);
+
+    const wpMap = new Map((workerProfiles || []).map((wp) => [wp.user_id, wp]));
+    const upMap = new Map((userProfiles || []).map((up) => [up.id, up]));
+
+    return payments.map((p) => {
+      const wp = wpMap.get(p.worker_id) || {};
+      const up = upMap.get(p.worker_id) || {};
+      return {
+        ...p,
+        worker_name: wp.display_name || up.full_name || up.email?.split("@")[0] || "Worker",
+        worker_email: up.email || "",
+        worker_phone: up.phone || "",
+        worker_trade: wp.trade || (Array.isArray(wp.skills) ? wp.skills[0] : wp.skills) || "General",
+        worker_approval_status: wp.approval_status || "pending",
+        worker_city: wp.city || "Guntur",
+      };
+    });
+  } catch (err) {
+    console.error("Error fetching worker registration payments for admin:", err);
+    return [];
+  }
+}
+
+/**
+ * Admin: Verify a worker's registration payment.
+ */
+export async function verifyWorkerPayment({ paymentId, adminId }) {
+  if (!paymentId) throw new Error("Payment ID is required.");
+  const { data, error } = await supabase
+    .from("worker_registration_payments")
+    .update({
+      payment_status: "verified",
+      verified_at: new Date().toISOString(),
+      verified_by: adminId || null,
+      rejection_reason: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", paymentId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Admin: Reject a worker's registration payment with a reason.
+ */
+export async function rejectWorkerPayment({ paymentId, adminId, reason }) {
+  if (!paymentId) throw new Error("Payment ID is required.");
+  const cleanReason = (reason || "").trim() || "Transaction reference could not be verified in UPI account.";
+
+  const { data, error } = await supabase
+    .from("worker_registration_payments")
+    .update({
+      payment_status: "rejected",
+      rejection_reason: cleanReason,
+      verified_at: null,
+      verified_by: adminId || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", paymentId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 
 // =========================================================================
 // SERVICE AREA COVERAGE VALIDATION
@@ -138,14 +365,24 @@ export async function registerWorker({
     },
   });
 
-  if (signUpError) {
-    if (signUpError.message?.toLowerCase().includes("already registered")) {
-      throw new Error("This email is already registered. Please login to your account.");
+  let user = data?.user;
+  let session = data?.session;
+
+  if (signUpError && signUpError.message?.toLowerCase().includes("already registered")) {
+    // Attempt authentication with existing credentials to allow registered users to complete worker application
+    const signInRes = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (signInRes.error || !signInRes.data?.user) {
+      throw new Error("This email is already registered. Please enter your correct account password to complete worker registration, or sign in.");
     }
+    user = signInRes.data.user;
+    session = signInRes.data.session;
+  } else if (signUpError) {
     throw signUpError;
   }
 
-  const user = data?.user;
   if (!user) {
     throw new Error("Registration could not be completed. Please try again.");
   }
@@ -163,11 +400,9 @@ export async function registerWorker({
       .from("profiles")
       .upsert({
         id: user.id,
-        email: email.trim(),
         full_name: fullName.trim(),
         phone: cleanPhone,
         city: location.trim(),
-        role: "worker",
       }, { onConflict: "id" });
   } catch (profErr) {
     console.warn("Notice updating profile:", profErr);
@@ -193,16 +428,12 @@ export async function registerWorker({
     .maybeSingle();
 
   if (existingApp) {
-    await supabase
-      .from("worker_profiles")
-      .update({ approval_status: "approved" })
-      .eq("user_id", user.id);
-
     return {
       user,
-      session: data.session,
-      approvalStatus: "approved",
+      session: session || data?.session,
+      approvalStatus: existingApp.approval_status || "pending",
       alreadyApplied: true,
+      workerProfile: existingApp,
     };
   }
 
@@ -217,11 +448,10 @@ export async function registerWorker({
         experience_years: expNum,
         city: location.trim(),
         service_area: location.trim(),
-        approval_status: "approved",
+        approval_status: "pending",
       },
     ])
-    .select()
-    .single();
+    .select();
 
   if (workerErr) {
     if (!workerErr.message?.includes("duplicate")) {
@@ -231,9 +461,9 @@ export async function registerWorker({
 
   return {
     user,
-    session: data.session,
-    approvalStatus: "approved",
-    workerProfile: workerData,
+    session: session || data?.session,
+    approvalStatus: "pending",
+    workerProfile: workerData?.[0] || null,
   };
 }
 
@@ -289,6 +519,55 @@ export async function resetPassword(email) {
   return data;
 }
 
+export const AUTHORIZED_ADMIN_EMAIL = "ssunny143870@gmail.com";
+
+/**
+ * Fetch and normalize user's role from public.user_roles.
+ * Handles multiple rows, case variations, whitespace, and exposes errors explicitly.
+ */
+export async function getUserRoleFromDatabase(userId) {
+  if (!userId) {
+    return { role: null, roles: [], error: new Error("Missing user ID.") };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error("getUserRoleFromDatabase query error:", error);
+      return { role: null, roles: [], error };
+    }
+
+    if (!data || data.length === 0) {
+      return { role: null, roles: [], error: null };
+    }
+
+    const roles = data
+      .map((r) => (r.role || "").toLowerCase().trim())
+      .filter(Boolean);
+
+    // Role priority: admin > worker > customer
+    let role = null;
+    if (roles.includes("admin")) {
+      role = "admin";
+    } else if (roles.includes("worker")) {
+      role = "worker";
+    } else if (roles.includes("customer")) {
+      role = "customer";
+    } else if (roles.length > 0) {
+      role = roles[0];
+    }
+
+    return { role, roles, error: null };
+  } catch (err) {
+    console.error("Unexpected error in getUserRoleFromDatabase:", err);
+    return { role: null, roles: [], error: err };
+  }
+}
+
 /**
  * Verify actual role & approval status against selected portal preference.
  * Customer, Worker, or Admin login preference must never grant or change roles.
@@ -302,13 +581,64 @@ export async function verifyRoleAccess(user, requestedRole) {
     };
   }
 
+  const cleanEmail = (user.email || "").toLowerCase().trim();
+
+  // Strict enforcement for admin role:
+  // 1. Only the designated email is allowed (ssunny143870@gmail.com)
+  // 2. The user's ID must have role = 'admin' in public.user_roles
+  if (requestedRole === "admin") {
+    if (cleanEmail !== AUTHORIZED_ADMIN_EMAIL) {
+      return {
+        authorized: false,
+        reason: "unauthorized_email",
+        actualRole: "unauthorized",
+        message: `Access denied. Only the authorized administrator account (${AUTHORIZED_ADMIN_EMAIL}) may sign in to the Admin Portal.`,
+      };
+    }
+
+    try {
+      const { role: dbRole, error: roleErr } = await getUserRoleFromDatabase(user.id);
+
+      if (roleErr) {
+        return {
+          authorized: false,
+          reason: "db_error",
+          actualRole: "error",
+          error: roleErr,
+          message: `Database error while querying public.user_roles: ${roleErr.message || "Permission or network error"}.`,
+        };
+      }
+
+      if (dbRole !== "admin") {
+        return {
+          authorized: false,
+          reason: "unassigned_admin_role",
+          actualRole: dbRole || "unassigned",
+          userId: user.id,
+          email: cleanEmail,
+          message: `Authentication succeeded for ${AUTHORIZED_ADMIN_EMAIL}, but this account is not assigned the 'admin' role in public.user_roles.`,
+          sqlInstruction: `INSERT INTO public.user_roles (user_id, role) VALUES ('${user.id}', 'admin') ON CONFLICT (user_id) DO UPDATE SET role = 'admin';`,
+        };
+      }
+
+      return {
+        authorized: true,
+        actualRole: "admin",
+        user,
+      };
+    } catch (err) {
+      console.error("verifyRoleAccess admin check error:", err);
+      return {
+        authorized: false,
+        reason: "error",
+        message: "Failed to verify administrator privileges in database.",
+      };
+    }
+  }
+
   try {
     // 1. Fetch user's actual role from the trusted user_roles table
-    const { data: roleRecord } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const { role: dbRole, error: roleErr } = await getUserRoleFromDatabase(user.id);
 
     // 2. Fetch worker profile & approval status
     const { data: workerRecord } = await supabase
@@ -325,28 +655,36 @@ export async function verifyRoleAccess(user, requestedRole) {
       .maybeSingle();
 
     let actualRole = null;
-    if (user.email === "ssunny143870@gmail.com" || roleRecord?.role === "admin") {
+    if (cleanEmail === AUTHORIZED_ADMIN_EMAIL && dbRole === "admin") {
       actualRole = "admin";
-    } else if (roleRecord?.role === "worker" || workerRecord || user.user_metadata?.role === "worker" || user.user_metadata?.trade) {
+    } else if (dbRole === "worker" || workerRecord) {
       actualRole = "worker";
-    } else if (roleRecord?.role === "customer" || profileRecord || user.user_metadata?.full_name) {
+    } else if (dbRole === "customer" || (profileRecord && !workerRecord && cleanEmail !== AUTHORIZED_ADMIN_EMAIL)) {
       actualRole = "customer";
+    } else if (dbRole) {
+      actualRole = dbRole;
     }
 
     if (!actualRole) {
       return {
         authorized: false,
-        reason: "missing_profile",
-        message: "No account profile found for this user. Access denied.",
+        reason: roleErr ? "db_error" : "missing_profile",
+        message: roleErr
+          ? `Failed to lookup user roles from database: ${roleErr.message}`
+          : "No account profile or role found for this user. Access denied.",
       };
     }
 
     if (actualRole !== requestedRole) {
       const mismatchMessage =
         actualRole === "customer" && requestedRole === "worker"
-          ? "This account is registered as a customer. Please use worker login with your worker account."
+          ? "This account is registered as a customer. Please use worker login with your worker account or register as a worker."
+          : actualRole === "admin" && requestedRole === "worker"
+          ? "This account is registered as an Administrator. Please use the Admin Portal login."
           : actualRole === "worker" && requestedRole === "customer"
           ? "This account is registered as a worker. Please use customer login with your customer account."
+          : actualRole === "customer" && requestedRole === "admin"
+          ? "This account does not have administrator privileges."
           : `This account is authorized as ${actualRole}, not ${requestedRole}.`;
 
       return {
@@ -372,14 +710,62 @@ export async function verifyRoleAccess(user, requestedRole) {
           message: "Please complete your worker registration.",
         };
       }
-      if (workerRecord.approval_status === "pending") {
+
+      // Check ₹25 Registration Payment status
+      let paymentRecord = null;
+      try {
+        const { data: pRec } = await supabase
+          .from("worker_registration_payments")
+          .select("*")
+          .eq("worker_id", user.id)
+          .maybeSingle();
+        paymentRecord = pRec || null;
+      } catch (_) {}
+
+      const paymentStatus = paymentRecord?.payment_status || "none";
+      const isPaymentVerified = paymentStatus === "verified";
+      const isApproved = workerRecord.approval_status === "approved";
+
+      // Access to /worker/dashboard requires BOTH payment verified AND approval status approved
+      if (!isPaymentVerified) {
+        return {
+          authorized: false,
+          actualRole: "worker",
+          reason: paymentStatus === "rejected" ? "payment_rejected" : paymentStatus === "pending" ? "payment_pending" : "payment_required",
+          paymentStatus,
+          paymentRecord,
+          isPaymentVerified: false,
+          isApproved,
+          workerProfile: workerRecord,
+          message: paymentStatus === "rejected"
+            ? `Your ₹25 registration payment was rejected: ${paymentRecord?.rejection_reason || "Invalid reference"}. Please resubmit.`
+            : paymentStatus === "pending"
+            ? "Your ₹25 registration payment is pending administrator verification."
+            : "Worker registration fee (₹25) payment is required to proceed.",
+        };
+      }
+
+      if (!isApproved) {
         return {
           authorized: false,
           actualRole: "worker",
           isPending: true,
+          paymentStatus: "verified",
+          isPaymentVerified: true,
+          isApproved: false,
           workerProfile: workerRecord,
+          message: "Your payment has been verified. Your worker application is awaiting admin approval.",
         };
       }
+
+      return {
+        authorized: true,
+        actualRole: "worker",
+        isPaymentVerified: true,
+        isApproved: true,
+        workerProfile: workerRecord,
+        profile: profileRecord,
+      };
     }
 
     return {
@@ -400,16 +786,34 @@ export async function verifyRoleAccess(user, requestedRole) {
 
 export async function getCurrentUserAndRole() {
   try {
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session?.user) return null;
+    // 1. Verify user session via getUser and getSession
+    let user = null;
+    let session = null;
 
-    const user = session.user;
+    try {
+      const { data: sData } = await supabase.auth.getSession();
+      if (sData?.session) {
+        session = sData.session;
+        user = session.user;
+      }
+    } catch (_) {}
 
-    const { data: roleData } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    if (!user) {
+      try {
+        const { data: uData, error: uErr } = await supabase.auth.getUser();
+        if (!uErr && uData?.user) {
+          user = uData.user;
+        }
+      } catch (_) {}
+    }
+
+    if (!user) return null;
+
+    const cleanEmail = (user.email || "").toLowerCase().trim();
+    const isTargetAdmin = cleanEmail === AUTHORIZED_ADMIN_EMAIL;
+
+    // Fetch user's role from public.user_roles without fragile maybeSingle
+    const { role: dbRole, error: roleErr } = await getUserRoleFromDatabase(user.id);
 
     const { data: wpData } = await supabase
       .from("worker_profiles")
@@ -424,21 +828,40 @@ export async function getCurrentUserAndRole() {
       .maybeSingle();
 
     let role = null;
-    if (user.email === "ssunny143870@gmail.com" || roleData?.role === "admin") {
+    // Strict admin role verification: user must have authorized admin email AND role === 'admin' in user_roles
+    if (isTargetAdmin && dbRole === "admin") {
       role = "admin";
-    } else if (roleData?.role === "worker" || wpData || user.user_metadata?.role === "worker" || user.user_metadata?.trade) {
+    } else if (dbRole === "worker" || (!isTargetAdmin && wpData)) {
       role = "worker";
-    } else if (roleData?.role === "customer" || profileData || user.user_metadata?.full_name) {
+    } else if (dbRole === "customer" || (!isTargetAdmin && !wpData && profileData)) {
       role = "customer";
+    } else if (dbRole) {
+      role = dbRole;
     }
 
-    const isPending = role === "worker" && wpData?.approval_status === "pending";
+    let paymentData = null;
+    if (role === "worker") {
+      try {
+        const { data: pData } = await supabase
+          .from("worker_registration_payments")
+          .select("*")
+          .eq("worker_id", user.id)
+          .maybeSingle();
+        paymentData = pData || null;
+      } catch (_) {}
+    }
+
+    const paymentStatus = paymentData?.payment_status || "none";
+    const isPaymentVerified = paymentStatus === "verified";
+    const isApproved = wpData?.approval_status === "approved";
+    const isPending = role === "worker" && (!isApproved || !isPaymentVerified);
     const isIncomplete = role === "worker" && !wpData;
 
     return {
       session,
       user,
       role,
+      roleError: roleErr || null,
       profile: profileData || (role === "customer" ? {
         id: user.id,
         full_name: user.user_metadata?.full_name || user.email?.split("@")[0],
@@ -446,6 +869,10 @@ export async function getCurrentUserAndRole() {
         city: user.user_metadata?.city || "Guntur",
       } : null),
       workerProfile: wpData || null,
+      payment: paymentData,
+      paymentStatus,
+      isPaymentVerified,
+      isApproved,
       isPending,
       isIncomplete,
     };
@@ -483,8 +910,55 @@ export async function createCustomerBooking({
   photoFile = null,
   workerId = null,
 }) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Please sign in to submit a service request.");
+  // 1. Verify active Supabase session (check getUser and inspect session)
+  let user = null;
+  let userError = null;
+  let sessionActive = false;
+
+  try {
+    const { data: userData, error: uErr } = await supabase.auth.getUser();
+    userError = uErr;
+    if (userData?.user) {
+      user = userData.user;
+    }
+  } catch (err) {
+    userError = err;
+  }
+
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    sessionActive = Boolean(sessionData?.session);
+    if (!user && sessionData?.session?.user) {
+      user = sessionData.session.user;
+    }
+  } catch (_) {}
+
+  // If user is not yet resolved but a session is active in storage, attempt session refresh
+  if (!user && sessionActive) {
+    try {
+      const { data: refData } = await supabase.auth.refreshSession();
+      if (refData?.user) {
+        user = refData.user;
+        userError = null;
+      }
+    } catch (_) {}
+  }
+
+  if (typeof import.meta !== "undefined" && import.meta.env?.DEV) {
+    console.log("[createCustomerBooking Auth Check]", {
+      hasUser: !!user,
+      userId: user?.id,
+      sessionActive,
+      userError: userError?.message || null,
+    });
+  }
+
+  if (!user) {
+    const safeDetail = (typeof import.meta !== "undefined" && import.meta.env?.DEV && userError?.message)
+      ? ` (${userError.message})`
+      : "";
+    throw new Error(`Please sign in to submit a service request.${safeDetail}`);
+  }
 
   const cleanPin = (pincode || "").toString().trim();
   if (!cleanPin || !/^\d{6}$/.test(cleanPin)) {
@@ -516,7 +990,11 @@ export async function createCustomerBooking({
   // Upload problem photo if provided
   let photoUrl = null;
   if (photoFile) {
-    photoUrl = await uploadFileToStorage(photoFile, "job_photos");
+    try {
+      photoUrl = await uploadFileToStorage(photoFile, "job_photos");
+    } catch (uploadErr) {
+      console.warn("Notice: photo upload skipped or failed:", uploadErr);
+    }
   }
 
   const detectedCity = cleanPin.startsWith("520") || cleanPin.startsWith("521") ? "Vijayawada" : "Guntur";
@@ -528,7 +1006,51 @@ export async function createCustomerBooking({
 
   let cleanCategoryId = isUuid(categoryId) ? categoryId.trim() : null;
   let cleanServiceId = isUuid(serviceId) ? serviceId.trim() : null;
-  const cleanWorkerId = isUuid(workerId) ? workerId.trim() : null;
+
+  // Resolve real worker profile UUID (ensures display names are never passed to foreign key)
+  let cleanWorkerId = null;
+  if (isUuid(workerId)) {
+    cleanWorkerId = workerId.trim();
+  } else if (typeof workerId === "string" && workerId.trim()) {
+    try {
+      const { data: matchedWorker } = await supabase
+        .from("worker_profiles")
+        .select("user_id")
+        .ilike("display_name", `%${workerId.trim()}%`)
+        .limit(1)
+        .maybeSingle();
+      if (matchedWorker?.user_id) {
+        cleanWorkerId = matchedWorker.user_id;
+      }
+    } catch (_) {}
+  }
+
+  // Validate that cleanWorkerId exists in worker_profiles and is approved + available
+  if (cleanWorkerId) {
+    try {
+      const { data: validWorker, error: wErr } = await supabase
+        .from("worker_profiles")
+        .select("user_id, display_name, approval_status, is_available")
+        .eq("user_id", cleanWorkerId)
+        .maybeSingle();
+
+      if (wErr || !validWorker?.user_id) {
+        throw new Error("The selected worker profile was not found in the verified database.");
+      }
+
+      const isApproved = String(validWorker.approval_status || "").trim().toLowerCase() === "approved";
+      const isAvailable = validWorker.is_available === true;
+
+      if (!isApproved || !isAvailable) {
+        throw new Error(
+          `Worker "${validWorker.display_name || "Selected worker"}" is currently unavailable or awaiting administrator approval. Please select an active available worker.`
+        );
+      }
+    } catch (err) {
+      console.error("Worker validation error in createCustomerBooking:", err);
+      throw err;
+    }
+  }
 
   // Resolve UUID for service by name if needed
   if (!cleanServiceId && (serviceName || serviceCategory)) {
@@ -564,121 +1086,80 @@ export async function createCustomerBooking({
     } catch (_) {}
   }
 
-  // Payload for Supabase bookings table
-  const payload = {
+  // Standard schema-compliant payload matching actual Supabase bookings table
+  const standardPayload = {
     customer_id: user.id,
-    service_category: serviceCategory,
     category_name: serviceCategory,
     service_name: serviceName || serviceCategory,
     category_id: cleanCategoryId,
     service_id: cleanServiceId,
-    description: problemDescription.trim(),
-    locality: locality.trim(),
-    pincode: cleanPin,
-    address: address.trim(),
+    description: `[${serviceCategory}${serviceName ? ` - ${serviceName}` : ""}] ${problemDescription.trim()} (Locality: ${locality}, PIN: ${cleanPin}, Time: ${preferredTime})${notes ? ` Notes: ${notes}` : ""}`,
+    address: `${address.trim()}, ${locality}, PIN: ${cleanPin}`,
     city: detectedCity,
     scheduled_at: `${preferredDate}T10:00:00Z`,
-    preferred_time: preferredTime,
-    notes: notes?.trim() || null,
-    photo_url: photoUrl,
-    status: "Pending",
+    status: "pending",
     payment_status: "Pending",
     total_price: 0,
     worker_id: cleanWorkerId,
   };
 
-  // Helper to store local offline/RLS fallback bookings
-  const fallbackId = `bk-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
-  const localBookingFallback = {
-    ...payload,
-    id: fallbackId,
-    created_at: new Date().toISOString(),
-  };
+  let insertedBooking = null;
 
-  try {
-    const { data, error } = await supabase
-      .from("bookings")
-      .insert([payload])
-      .select()
-      .single();
+  const { data, error } = await supabase
+    .from("bookings")
+    .insert([standardPayload])
+    .select()
+    .single();
 
-    if (!error && data) {
-      // Record initial status in booking_status_history
-      try {
-        await supabase.from("booking_status_history").insert([{
-          booking_id: data.id,
-          from_status: null,
-          to_status: "pending",
-          changed_by: user.id,
-          notes: "Booking submitted as pending by customer"
-        }]);
-      } catch (_) {}
-
-      return data;
-    }
-
-    // Graceful fallback for schema variations
-    const fallbackPayload = {
-      customer_id: user.id,
-      category_name: serviceCategory,
-      service_name: serviceName || serviceCategory,
-      category_id: cleanCategoryId,
-      service_id: cleanServiceId,
-      description: `[${serviceCategory}${serviceName ? ` - ${serviceName}` : ""}] ${problemDescription.trim()} (Locality: ${locality}, PIN: ${cleanPin}, Time: ${preferredTime})${notes ? ` Notes: ${notes}` : ""}`,
-      address: `${address.trim()}, ${locality}, PIN: ${cleanPin}`,
-      city: detectedCity,
-      scheduled_at: `${preferredDate}T10:00:00Z`,
-      status: "Pending",
-      total_price: 0,
-      worker_id: cleanWorkerId,
-    };
-
-    const { data: fbData, error: fbError } = await supabase
-      .from("bookings")
-      .insert([fallbackPayload])
-      .select()
-      .single();
-
-    if (!fbError && fbData) {
-      try {
-        await supabase.from("booking_status_history").insert([{
-          booking_id: fbData.id,
-          from_status: null,
-          to_status: "pending",
-          changed_by: user.id,
-          notes: "Booking submitted as pending by customer"
-        }]);
-      } catch (_) {}
-
-      return fbData;
-    }
-
-    // If Supabase rejected due to RLS policies not yet migrated in Supabase Dashboard
-    if (
-      fbError?.code === "42501" ||
-      fbError?.message?.toLowerCase().includes("row-level security") ||
-      fbError?.message?.toLowerCase().includes("permission denied") ||
-      error?.code === "42501" ||
-      error?.message?.toLowerCase().includes("row-level security")
-    ) {
-      console.warn("Notice: Database RLS policy for bookings table needs update. Storing booking locally.", fbError || error);
-      saveLocalBooking(localBookingFallback);
-      return localBookingFallback;
-    }
-
-    throw fbError || error;
-  } catch (err) {
-    if (
-      err.code === "42501" ||
-      err.message?.toLowerCase().includes("row-level security") ||
-      err.message?.toLowerCase().includes("permission denied")
-    ) {
-      console.warn("Notice: Database RLS blocked insert. Saving booking locally:", err);
-      saveLocalBooking(localBookingFallback);
-      return localBookingFallback;
-    }
-    throw err;
+  if (error) {
+    console.error("Supabase booking insert error:", error);
+    throw error;
   }
+  insertedBooking = data;
+
+  if (insertedBooking) {
+    saveLocalBooking(insertedBooking);
+
+    try {
+      await supabase.from("notifications").insert([{
+        recipient_id: user.id,
+        title: "Booking Submitted",
+        message: `Your request for ${serviceName || serviceCategory} has been submitted. A verified artisan will accept shortly.`,
+        booking_id: insertedBooking.id,
+      }]);
+    } catch (_) {}
+
+    try {
+      await supabase.from("booking_status_history").insert([{
+        booking_id: insertedBooking.id,
+        from_status: null,
+        to_status: "pending",
+        changed_by: user.id,
+        notes: "Booking submitted as pending by customer",
+      }]);
+    } catch (_) {}
+
+    // Also notify assigned worker if a worker was specifically assigned
+    if (cleanWorkerId) {
+      try {
+        await supabase.from("notifications").insert([{
+          recipient_id: cleanWorkerId,
+          title: "New Service Request",
+          message: `New booking request for ${serviceName || serviceCategory} in ${locality}.`,
+          booking_id: insertedBooking.id,
+        }]);
+      } catch (_) {}
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("ws_booking_updated", {
+        detail: { bookingId: insertedBooking.id, booking: insertedBooking },
+      })
+    );
+    return insertedBooking;
+  }
+
+  throw new Error("Failed to insert booking record into Supabase.");
 }
 
 // Backwards-compatible alias for existing code
@@ -781,12 +1262,28 @@ export async function getCustomerBookings(customerId) {
       
       const dbBookings = simpleData || [];
       const dbIds = new Set(dbBookings.map((b) => b.id));
-      return [...dbBookings, ...localList.filter((b) => !dbIds.has(b.id))];
+      const combined = [...dbBookings, ...localList.filter((b) => !dbIds.has(b.id))];
+      return combined.map((b) => ({
+        ...b,
+        service_category: b.service_category || b.category_name || "General Service",
+        service_name: b.service_name || b.service_category || b.category_name || "Service",
+        locality: b.locality || b.city || "Guntur",
+        status: b.status || "Pending",
+        worker_profiles: b.worker_profiles || (b.worker_id ? { display_name: "Assigned Artisan", city: b.city || "Guntur" } : null),
+      }));
     }
 
     const dbBookings = data || [];
     const dbIds = new Set(dbBookings.map((b) => b.id));
-    return [...dbBookings, ...localList.filter((b) => !dbIds.has(b.id))];
+    const combined = [...dbBookings, ...localList.filter((b) => !dbIds.has(b.id))];
+    return combined.map((b) => ({
+      ...b,
+      service_category: b.service_category || b.category_name || "General Service",
+      service_name: b.service_name || b.service_category || b.category_name || "Service",
+      locality: b.locality || b.city || "Guntur",
+      status: b.status || "Pending",
+      worker_profiles: b.worker_profiles || (b.worker_id ? { display_name: "Assigned Artisan", city: b.city || "Guntur" } : null),
+    }));
   } catch (_) {
     return localList;
   }
@@ -841,43 +1338,74 @@ export async function getApprovedWorkersForCustomer({ category = "", city = "", 
         hourly_rate,
         is_available
       `)
-      .eq("approval_status", "approved");
-
-    if (city && city !== "All Cities") {
-      query = query.ilike("city", `%${city}%`);
-    }
+      .in("approval_status", ["approved", "Approved"])
+      .eq("is_available", true);
 
     const { data, error } = await query.order("experience_years", { ascending: false });
-    if (error) throw error;
+    if (error) {
+      console.error("Error querying approved workers from Supabase:", error);
+      throw error;
+    }
 
-    let workers = data || [];
+    // Exclude workers who are pending, rejected, suspended, offline, unavailable, or missing profile info
+    let workers = (data || []).filter((w) => {
+      if (!w || !w.user_id || !w.display_name) return false;
+      const appStatus = String(w.approval_status || "").trim().toLowerCase();
+      return appStatus === "approved" && w.is_available === true;
+    });
 
-    // Filter by category or search term if provided
+    // Filter by category:
+    // A worker appears under a category ONLY when their saved skills actually include that category (or their trade matches)
     if (category && category !== "all" && category !== "All") {
-      const catLower = category.toLowerCase();
+      const catLower = category.toLowerCase().trim();
       workers = workers.filter((w) => {
-        const tradeMatch = (w.trade || "").toLowerCase().includes(catLower);
-        const bioMatch = (w.bio || "").toLowerCase().includes(catLower);
-        const skillsMatch = (w.skills || []).some((s) => s.toLowerCase().includes(catLower));
-        return tradeMatch || bioMatch || skillsMatch;
+        const skillsList = Array.isArray(w.skills)
+          ? w.skills.map((s) => (s || "").toLowerCase().trim())
+          : [(w.skills || "").toLowerCase().trim()];
+        const tradeLower = (w.trade || "").toLowerCase().trim();
+        return (
+          skillsList.some((s) => s === catLower || s.includes(catLower) || catLower.includes(s)) ||
+          tradeLower === catLower ||
+          tradeLower.includes(catLower) ||
+          catLower.includes(tradeLower)
+        );
       });
     }
 
+    // Filter by location / service area
+    if (city && city !== "All Cities") {
+      const cityLower = city.toLowerCase().trim();
+      workers = workers.filter((w) => {
+        const wCity = (w.city || "").toLowerCase();
+        const wArea = (w.service_area || "").toLowerCase();
+        if (cityLower === "guntur") {
+          const gunturLocalities = [
+            "guntur", "brodipet", "arundelpet", "lakshmipuram", "pattabhipuram",
+            "koretipadu", "vidyanagar", "syamalanagar", "gujanagundla", "amaravathi", "old guntur"
+          ];
+          return gunturLocalities.some((loc) => wCity.includes(loc) || wArea.includes(loc)) || !wCity;
+        }
+        return wCity.includes(cityLower) || wArea.includes(cityLower);
+      });
+    }
+
+    // Search filter across name, trade, skills, city, service_area
     if (search && search.trim() !== "") {
       const sLower = search.toLowerCase().trim();
       workers = workers.filter((w) => {
         const nameMatch = (w.display_name || "").toLowerCase().includes(sLower);
         const tradeMatch = (w.trade || "").toLowerCase().includes(sLower);
         const cityMatch = (w.city || "").toLowerCase().includes(sLower);
-        const skillsMatch = (w.skills || []).some((s) => s.toLowerCase().includes(sLower));
-        return nameMatch || tradeMatch || cityMatch || skillsMatch;
+        const areaMatch = (w.service_area || "").toLowerCase().includes(sLower);
+        const skillsMatch = (w.skills || []).some((s) => (s || "").toLowerCase().includes(sLower));
+        return nameMatch || tradeMatch || cityMatch || areaMatch || skillsMatch;
       });
     }
 
     return workers;
   } catch (err) {
-    console.warn("Notice fetching approved workers:", err);
-    return [];
+    console.error("Notice fetching approved workers:", err);
+    throw err;
   }
 }
 
@@ -999,7 +1527,6 @@ export async function updateCustomerProfile({ fullName, phone, city, address }) 
   if (fullName !== undefined) payload.full_name = fullName.trim();
   if (phone !== undefined) payload.phone = phone.trim();
   if (city !== undefined) payload.city = city.trim();
-  if (address !== undefined) payload.address = address.trim();
 
   const { data, error } = await supabase
     .from("profiles")
@@ -1081,18 +1608,45 @@ export async function getNewServiceRequestsForWorker(workerId) {
       query = query.is("worker_id", null);
     }
 
+    let dbBookings = [];
     const { data, error } = await query.order("created_at", { ascending: false });
-    if (error) {
-      const dbIds = new Set((data || []).map((b) => b.id));
-      return [...(data || []), ...localList.filter((b) => !dbIds.has(b.id) && !declinedIds.includes(b.id))];
+    if (!error && data) {
+      dbBookings = data;
+    } else if (error) {
+      console.warn("Notice: Query with customer profile join returned error, falling back to base bookings:", error.message);
+      let fallbackQuery = supabase
+        .from("bookings")
+        .select("*")
+        .in("status", ["Pending", "pending", "Requested", "requested"]);
+
+      if (workerId) {
+        fallbackQuery = fallbackQuery.or(`worker_id.is.null,worker_id.eq.${workerId}`);
+      } else {
+        fallbackQuery = fallbackQuery.is("worker_id", null);
+      }
+
+      const { data: fbData } = await fallbackQuery.order("created_at", { ascending: false });
+      dbBookings = fbData || [];
     }
 
-    const dbBookings = data || [];
     const dbIds = new Set(dbBookings.map((b) => b.id));
     const combined = [...dbBookings, ...localList.filter((b) => !dbIds.has(b.id))];
 
-    // Filter out declined bookings
-    return combined.filter((b) => !declinedIds.includes(b.id));
+    // Filter out declined bookings and normalize fields
+    return combined
+      .filter((b) => !declinedIds.includes(b.id))
+      .map((b) => ({
+        ...b,
+        service_category: b.service_category || b.category_name || "General Service",
+        description: b.description || b.problem_description || "Customer service request",
+        locality: b.locality || b.city || "Guntur",
+        preferred_time: b.preferred_time || "Morning",
+        profiles: b.profiles || {
+          full_name: b.customer_name || "Customer",
+          phone: b.customer_phone || "+91 98765 43210",
+          city: b.city || "Guntur",
+        },
+      }));
   } catch (err) {
     console.error("Error fetching new worker requests:", err);
     return localList;
@@ -1217,10 +1771,16 @@ export async function getWorkerActiveJobs(workerId) {
       .in("status", ["Accepted", "accepted", "On the Way", "on_the_way", "In Progress", "in_progress"])
       .order("scheduled_at", { ascending: true });
 
-    if (error) return localList;
-    const dbBookings = data || [];
+    const dbBookings = (!error && data) ? data : [];
     const dbIds = new Set(dbBookings.map((b) => b.id));
-    return [...dbBookings, ...localList.filter((b) => !dbIds.has(b.id))];
+    const all = [...dbBookings, ...localList.filter((b) => !dbIds.has(b.id))];
+    return all.map((b) => ({
+      ...b,
+      service_category: b.service_category || b.category_name || "General Service",
+      location: `${b.locality || b.city || "Guntur"}, Andhra Pradesh`,
+      date: b.scheduled_at ? new Date(b.scheduled_at).toLocaleDateString() : (b.preferred_time || "Upcoming"),
+      status: b.status || "Accepted",
+    }));
   } catch (_) {
     return localList;
   }
@@ -1252,10 +1812,16 @@ export async function getWorkerBookingHistory(workerId) {
       .in("status", ["Completed", "completed", "Customer Confirmation", "Closed", "closed", "Cancelled", "cancelled", "Rejected", "rejected"])
       .order("created_at", { ascending: false });
 
-    if (error) return localList;
-    const dbBookings = data || [];
+    const dbBookings = (!error && data) ? data : [];
     const dbIds = new Set(dbBookings.map((b) => b.id));
-    return [...dbBookings, ...localList.filter((b) => !dbIds.has(b.id))];
+    const all = [...dbBookings, ...localList.filter((b) => !dbIds.has(b.id))];
+    return all.map((b) => ({
+      ...b,
+      service_category: b.service_category || b.category_name || "General Service",
+      location: `${b.locality || b.city || "Guntur"}, Andhra Pradesh`,
+      date: b.scheduled_at ? new Date(b.scheduled_at).toLocaleDateString() : "Past Job",
+      status: b.status || "Completed",
+    }));
   } catch (_) {
     return localList;
   }
@@ -1286,12 +1852,13 @@ export async function updateWorkerJobStatus(bookingId, status, notes = "") {
     } catch (_) {}
 
     // Direct update fallback
+    const normalizedStatus = status === "In Progress" ? "in_progress" : status === "On the Way" ? "on_the_way" : status;
     await supabase
       .from("bookings")
-      .update({ status, updated_at: new Date().toISOString() })
+      .update({ status: normalizedStatus, updated_at: new Date().toISOString() })
       .eq("id", bookingId);
 
-    return { id: bookingId, status };
+    return { id: bookingId, status: normalizedStatus };
   }
 }
 
@@ -1300,6 +1867,7 @@ export const changeBookingStatus = ({ bookingId, status }) =>
   updateWorkerJobStatus(bookingId, status);
 
 export async function getWorkerProfile(userId) {
+  if (!userId) return null;
   try {
     const { data, error } = await supabase
       .from("worker_profiles")
@@ -1307,7 +1875,7 @@ export async function getWorkerProfile(userId) {
       .eq("user_id", userId)
       .maybeSingle();
     if (error) throw error;
-    return data;
+    return data || null;
   } catch (err) {
     console.warn("Error fetching worker profile:", err);
     return null;
@@ -1328,9 +1896,18 @@ export async function updateWorkerConfiguration({
 
   const payload = {};
   if (skills !== undefined) {
-    payload.skills = Array.isArray(skills) ? skills : [skills];
-    if (payload.skills.length > 0) {
-      payload.trade = payload.skills[0];
+    const rawSkills = Array.isArray(skills) ? skills : [skills];
+    // Deduplicate and filter out empty / invalid entries
+    const cleanSkills = Array.from(
+      new Set(
+        rawSkills
+          .map((s) => (typeof s === "string" ? s.trim() : ""))
+          .filter(Boolean)
+      )
+    );
+    payload.skills = cleanSkills;
+    if (cleanSkills.length > 0) {
+      payload.trade = cleanSkills[0];
     }
   }
   if (serviceAreas !== undefined) {
@@ -1344,15 +1921,68 @@ export async function updateWorkerConfiguration({
   if (bio !== undefined) payload.bio = bio;
   if (experienceYears !== undefined) payload.experience_years = Number(experienceYears);
 
-  const { data, error } = await supabase
+  // 1. Check whether a worker profile already exists for this user
+  const { data: existingProfile } = await supabase
+    .from("worker_profiles")
+    .select("*")
+    .eq("user_id", targetId)
+    .maybeSingle();
+
+  // 2. If the profile does not exist, insert a new worker profile record
+  if (!existingProfile) {
+    const displayName =
+      user?.user_metadata?.full_name ||
+      user?.user_metadata?.name ||
+      user?.email?.split("@")[0] ||
+      "Artisan Worker";
+
+    const insertPayload = {
+      user_id: targetId,
+      display_name: displayName,
+      trade: payload.trade || "General",
+      skills: payload.skills || [],
+      city: user?.user_metadata?.city || "Guntur",
+      service_area: payload.service_area || user?.user_metadata?.city || "All Guntur",
+      experience_years: payload.experience_years !== undefined ? payload.experience_years : 2,
+      approval_status: "approved",
+      is_available: payload.is_available !== undefined ? payload.is_available : true,
+      bio: payload.bio || "",
+    };
+
+    let { data: insertedRows, error: insertErr } = await supabase
+      .from("worker_profiles")
+      .insert([insertPayload])
+      .select();
+
+    if (insertErr && insertErr.code === "42501") {
+      // If RLS policy enforces 'pending' for initial insert
+      insertPayload.approval_status = "pending";
+      const retry = await supabase
+        .from("worker_profiles")
+        .insert([insertPayload])
+        .select();
+      insertedRows = retry.data;
+      insertErr = retry.error;
+    }
+
+    if (insertErr) throw insertErr;
+    return insertedRows?.[0] || insertPayload;
+  }
+
+  // 3. If the profile exists, update it cleanly
+  const { data: updatedRows, error: updateErr } = await supabase
     .from("worker_profiles")
     .update(payload)
     .eq("user_id", targetId)
-    .select()
-    .single();
+    .select();
 
-  if (error) throw error;
-  return data;
+  if (updateErr) throw updateErr;
+
+  const result = (updatedRows && updatedRows.length > 0)
+    ? updatedRows[0]
+    : { ...existingProfile, ...payload };
+
+  return result;
 }
 
 export async function submitWorkerApplication({
@@ -1382,11 +2012,10 @@ export async function submitWorkerApplication({
         skills: skills || [],
       },
     ])
-    .select()
-    .single();
+    .select();
 
   if (error) throw error;
-  return data;
+  return data?.[0] || null;
 }
 
 export async function reviewWorkerApplication({ workerUserId, approved }) {
@@ -1491,50 +2120,115 @@ export async function markNotificationAsRead(id) {
 }
 
 export async function getAllUsersForAdmin() {
-  const { data: profiles, error: pError } = await supabase
-    .from("profiles")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (pError) throw pError;
+  let profileList = [];
+  try {
+    const { data: profiles, error: pError } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (!pError && profiles) {
+      profileList = profiles;
+    }
+  } catch (_) {}
 
-  const { data: roles } = await supabase.from("user_roles").select("*");
-  const roleMap = {};
-  roles?.forEach((r) => {
-    roleMap[r.user_id] = r.role;
+  let roleMap = {};
+  try {
+    const { data: roles } = await supabase.from("user_roles").select("*");
+    roles?.forEach((r) => {
+      roleMap[r.user_id] = r.role;
+    });
+  } catch (_) {}
+
+  // Gather unique customers from bookings if profiles table was previously empty
+  const knownUserIds = new Set(profileList.map((p) => p.id));
+  try {
+    const { data: bookings } = await supabase
+      .from("bookings")
+      .select("customer_id, profiles (id, full_name, phone, city)");
+    bookings?.forEach((b) => {
+      if (b.customer_id && !knownUserIds.has(b.customer_id)) {
+        knownUserIds.add(b.customer_id);
+        profileList.push({
+          id: b.customer_id,
+          full_name: b.profiles?.full_name || "Customer",
+          phone: b.profiles?.phone || "",
+          city: b.profiles?.city || "Guntur",
+          role: "customer",
+          created_at: new Date().toISOString(),
+        });
+      }
+    });
+  } catch (_) {}
+
+  // Also include customers from local shared bookings
+  const localList = getAllLocalBookings();
+  localList.forEach((b) => {
+    if (b.customer_id && !knownUserIds.has(b.customer_id)) {
+      knownUserIds.add(b.customer_id);
+      profileList.push({
+        id: b.customer_id,
+        full_name: b.customer_name || "Customer",
+        phone: b.customer_phone || "",
+        city: b.city || "Guntur",
+        role: "customer",
+        created_at: b.created_at || new Date().toISOString(),
+      });
+    }
   });
 
-  return profiles.map((p) => ({
+  return profileList.map((p) => ({
     ...p,
-    role: roleMap[p.id] || "customer",
+    role: roleMap[p.id] || p.role || "customer",
   }));
 }
 
 export async function getAllWorkerProfilesForAdmin() {
-  const { data, error } = await supabase
-    .from("worker_profiles")
-    .select(`
-      user_id,
-      display_name,
-      bio,
-      city,
-      service_area,
-      experience_years,
-      avatar_url,
-      approval_status,
-      created_at,
-      skills,
-      availability,
-      profiles (
-        id,
-        full_name,
-        phone,
-        city
-      )
-    `)
-    .order("created_at", { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from("worker_profiles")
+      .select(`
+        user_id,
+        display_name,
+        bio,
+        city,
+        service_area,
+        experience_years,
+        avatar_url,
+        approval_status,
+        created_at,
+        skills,
+        is_available,
+        hourly_rate,
+        rating,
+        trade,
+        profiles (
+          id,
+          full_name,
+          phone,
+          city
+        )
+      `)
+      .order("created_at", { ascending: false });
 
-  if (error) return [];
-  return data || [];
+    if (!error && data) {
+      return data.map((w) => ({
+        ...w,
+        availability: w.availability || (w.is_available ? "Available" : "Busy"),
+        approval_status: (w.approval_status || "approved").toLowerCase(),
+      }));
+    }
+
+    // Fallback: select all columns directly without join
+    const { data: fbData } = await supabase.from("worker_profiles").select("*");
+    return (fbData || []).map((w) => ({
+      ...w,
+      availability: w.availability || (w.is_available ? "Available" : "Busy"),
+      approval_status: (w.approval_status || "approved").toLowerCase(),
+    }));
+  } catch (err) {
+    console.warn("Notice loading worker profiles for admin:", err);
+    return [];
+  }
 }
 
 export const getAllWorkerApplicationsForAdmin = getAllWorkerProfilesForAdmin;
@@ -1546,7 +2240,7 @@ export async function getAllBookingsForAdmin() {
       .from("bookings")
       .select(`
         *,
-        profiles (
+        profiles:customer_id (
           id,
           full_name,
           phone,
@@ -1560,10 +2254,28 @@ export async function getAllBookingsForAdmin() {
       `)
       .order("created_at", { ascending: false });
 
-    if (error) return localList;
-    const dbBookings = data || [];
+    const dbBookings = (!error && data) ? data : [];
     const dbIds = new Set(dbBookings.map((b) => b.id));
-    return [...dbBookings, ...localList.filter((b) => !dbIds.has(b.id))];
+    const all = [...dbBookings, ...localList.filter((b) => !dbIds.has(b.id))];
+
+    // Normalize properties for AdminDashboard consumption
+    return all.map((b) => {
+      const normStatus = (b.status || "Pending").trim();
+      const capitalizedStatus =
+        normStatus.charAt(0).toUpperCase() + normStatus.slice(1);
+
+      return {
+        ...b,
+        booking_code: b.booking_code || `WS-${(b.id || "").toString().replace(/[^a-zA-Z0-9]/g, "").substring(0, 8).toUpperCase()}`,
+        service_category: b.service_category || b.category_name || "General Service",
+        service_name: b.service_name || b.service_category || b.category_name || "Service",
+        locality: b.locality || b.city || "Guntur",
+        customer_name: b.profiles?.full_name || b.customer_name || "Customer",
+        customer_phone: b.profiles?.phone || b.customer_phone || "+91 98765 43210",
+        worker_name: b.worker_profiles?.display_name || b.worker_name || (b.worker_id ? "Assigned Artisan" : "Unassigned"),
+        status: capitalizedStatus,
+      };
+    });
   } catch (_) {
     return localList;
   }
@@ -1738,9 +2450,14 @@ export async function recordBookingStatusTransition({
 }) {
   if (!bookingId || !toStatus) throw new Error("Booking ID and toStatus are required");
 
+  // Normalize status string if needed to satisfy database check constraints
+  let normalizedStatus = toStatus;
+  if (toStatus === "In Progress") normalizedStatus = "in_progress";
+  if (toStatus === "On the Way") normalizedStatus = "on_the_way";
+
   // 1. Update status on bookings table
   const updatePayload = {
-    status: toStatus,
+    status: normalizedStatus,
     updated_at: new Date().toISOString(),
   };
 

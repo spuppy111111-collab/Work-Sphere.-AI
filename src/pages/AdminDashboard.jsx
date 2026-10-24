@@ -32,6 +32,9 @@ import {
   updateService,
   getAllBookingsForAdmin,
   changeBookingStatus,
+  getAllWorkerPaymentsForAdmin,
+  verifyWorkerPayment,
+  rejectWorkerPayment,
   supabase
 } from "../lib/supabase";
 import { useTimeGreeting, useLiveClock } from "../utils/greeting";
@@ -59,24 +62,32 @@ export default function AdminDashboard({ lang = "en", currentUser, onNavigate })
   const [isCreatingService, setIsCreatingService] = useState(false);
 
   const [isWorkerModalOpen, setIsWorkerModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isBookingsModalOpen, setIsBookingsModalOpen] = useState(false);
   const [isReportsModalOpen, setIsReportsModalOpen] = useState(false);
   const [approvingWorkerId, setApprovingWorkerId] = useState(null);
+  const [workerPayments, setWorkerPayments] = useState([]);
+  const [verifyingPaymentId, setVerifyingPaymentId] = useState(null);
+  const [rejectingPaymentId, setRejectingPaymentId] = useState(null);
+  const [showRejectInputForId, setShowRejectInputForId] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   // Load real records from Supabase
   const loadAdminData = async () => {
     try {
       setLoading(true);
-      const [usersData, workersData, servicesData, bookingsData] = await Promise.all([
+      const [usersData, workersData, servicesData, bookingsData, paymentsData] = await Promise.all([
         getAllUsersForAdmin().catch(() => []),
         getAllWorkerApplicationsForAdmin().catch(() => []),
         getAllServicesForAdmin().catch(() => []),
         getAllBookingsForAdmin().catch(() => []),
+        getAllWorkerPaymentsForAdmin().catch(() => []),
       ]);
       setUsers(usersData || []);
       setWorkers(workersData || []);
       setServices(servicesData || []);
       setBookings(bookingsData || []);
+      setWorkerPayments(paymentsData || []);
     } catch (err) {
       console.warn("Notice loading admin records:", err);
     } finally {
@@ -131,6 +142,37 @@ export default function AdminDashboard({ lang = "en", currentUser, onNavigate })
     }
   };
 
+  // Payment Verification Actions (Separate from Worker Approval)
+  const handleVerifyPayment = async (paymentId) => {
+    try {
+      setVerifyingPaymentId(paymentId);
+      await verifyWorkerPayment({ paymentId, adminId: currentUser?.id });
+      await loadAdminData();
+    } catch (err) {
+      alert(`Payment verification error: ${err.message}`);
+    } finally {
+      setVerifyingPaymentId(null);
+    }
+  };
+
+  const handleRejectPayment = async (paymentId) => {
+    try {
+      setRejectingPaymentId(paymentId);
+      await rejectWorkerPayment({
+        paymentId,
+        adminId: currentUser?.id,
+        reason: rejectReason.trim() || "Transaction reference could not be verified in UPI account.",
+      });
+      setShowRejectInputForId(null);
+      setRejectReason("");
+      await loadAdminData();
+    } catch (err) {
+      alert(`Payment rejection error: ${err.message}`);
+    } finally {
+      setRejectingPaymentId(null);
+    }
+  };
+
   // Create Service Listing (NO FIXED PRICES)
   const handleCreateService = async (e) => {
     e.preventDefault();
@@ -157,8 +199,15 @@ export default function AdminDashboard({ lang = "en", currentUser, onNavigate })
   };
 
   // Real calculations computed directly from Supabase records
-  const pendingWorkers = workers.filter((w) => (w.approval_status || "").toLowerCase() === "pending");
-  const approvedWorkers = workers.filter((w) => (w.approval_status || "").toLowerCase() === "approved");
+  const pendingWorkers = workers.filter(
+    (w) => (w.approval_status || "").toLowerCase() === "pending" || (w.approval_status || "").toLowerCase() === "under_review"
+  );
+  const approvedWorkers = workers.filter(
+    (w) =>
+      (w.approval_status || "").toLowerCase() === "approved" ||
+      (w.approval_status || "").toLowerCase() === "verified" ||
+      (w.is_available === true && (w.approval_status || "").toLowerCase() !== "rejected")
+  );
   const totalCustomers = users.filter((u) => u.role !== "admin").length || users.length;
 
   const dynamicActivities = [
@@ -690,6 +739,58 @@ export default function AdminDashboard({ lang = "en", currentUser, onNavigate })
                 }}
               >
                 {pendingWorkers.length}
+              </span>
+              <ChevronRight size={16} color="#94a3b8" />
+            </button>
+
+            {/* 1B. Review Worker Payments (₹25 UPI) */}
+            <button
+              onClick={() => setIsPaymentModalOpen(true)}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "10px 12px",
+                borderRadius: "10px",
+                background: "#f8fafc",
+                border: "1px solid #f1f5f9",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                textAlign: "left",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#f8fafc")}
+            >
+              <div
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "8px",
+                  background: "rgba(214, 183, 121, 0.18)",
+                  color: "#B8964E",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Sparkles size={16} />
+              </div>
+              <span style={{ flex: 1, fontSize: "0.82rem", fontWeight: "600", color: "#1e293b" }}>
+                Worker Payments (₹25 UPI)
+              </span>
+              <span
+                style={{
+                  background: workerPayments.filter(p => p.payment_status === "pending").length > 0 ? "#f59e0b" : "#10b981",
+                  color: "#ffffff",
+                  fontSize: "0.68rem",
+                  fontWeight: "700",
+                  padding: "2px 7px",
+                  borderRadius: "999px",
+                }}
+              >
+                {workerPayments.filter(p => p.payment_status === "pending").length} Pending
               </span>
               <ChevronRight size={16} color="#94a3b8" />
             </button>
@@ -1819,6 +1920,361 @@ export default function AdminDashboard({ lang = "en", currentUser, onNavigate })
                       >
                         {b.status || "Pending"}
                       </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3B: Worker Registration Payments (₹25 UPI) Section */}
+      {isPaymentModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.65)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "16px",
+              padding: "1.5rem",
+              width: "100%",
+              maxWidth: "960px",
+              maxHeight: "88vh",
+              overflowY: "auto",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.25)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>
+                    Worker Registration Payments (₹25 UPI)
+                  </h3>
+                  <span
+                    style={{
+                      background: "#fef3c7",
+                      color: "#b45309",
+                      fontSize: "0.72rem",
+                      fontWeight: "700",
+                      padding: "2px 8px",
+                      borderRadius: "999px",
+                    }}
+                  >
+                    FamX: 6281376739@fam
+                  </span>
+                </div>
+                <p style={{ fontSize: "0.78rem", color: "#64748b", margin: "4px 0 0 0" }}>
+                  Admin verification is required before worker approval. Verify the UTR against your bank or UPI transaction record.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsPaymentModalOpen(false)}
+                style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: "4px" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Security Verification Notice */}
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                padding: "10px 14px",
+                marginBottom: "1.25rem",
+                fontSize: "0.78rem",
+                color: "#475569",
+                lineHeight: 1.5,
+              }}
+            >
+              <b>Admin Verification Rules:</b> A worker can access <code>/worker/dashboard</code> only when <b>both</b> conditions are satisfied: (1) Payment status is verified, and (2) Worker application is approved. Payment verification and worker approval remain independent actions.
+            </div>
+
+            {/* Payments List */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {workerPayments.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "#64748b" }}>
+                  No worker registration payment records found.
+                </div>
+              ) : (
+                workerPayments.map((p) => {
+                  const status = (p.payment_status || "pending").toLowerCase();
+                  const approvalStatus = (p.worker_approval_status || "pending").toLowerCase();
+                  const isVerified = status === "verified";
+                  const isRejected = status === "rejected";
+                  const isPending = status === "pending";
+
+                  const statusBg = isVerified ? "#dcfce7" : isRejected ? "#fee2e2" : "#fef3c7";
+                  const statusColor = isVerified ? "#15803d" : isRejected ? "#b91c1c" : "#b45309";
+
+                  const approvalBg = approvalStatus === "approved" ? "#e0e7ff" : approvalStatus === "rejected" ? "#fee2e2" : "#f3f4f6";
+                  const approvalColor = approvalStatus === "approved" ? "#4338ca" : approvalStatus === "rejected" ? "#b91c1c" : "#4b5563";
+
+                  return (
+                    <div
+                      key={p.id}
+                      style={{
+                        padding: "14px 16px",
+                        borderRadius: "12px",
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
+                        <div>
+                          <div style={{ fontWeight: "800", fontSize: "0.95rem", color: "#0f172a" }}>
+                            {p.worker_name}
+                          </div>
+                          <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                            Trade: {p.worker_trade} • City: {p.worker_city} • {p.worker_phone || p.worker_email}
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                          <span
+                            style={{
+                              background: statusBg,
+                              color: statusColor,
+                              fontSize: "0.72rem",
+                              fontWeight: "700",
+                              padding: "4px 10px",
+                              borderRadius: "999px",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.02em",
+                            }}
+                          >
+                            Payment: {status}
+                          </span>
+
+                          <span
+                            style={{
+                              background: approvalBg,
+                              color: approvalColor,
+                              fontSize: "0.72rem",
+                              fontWeight: "700",
+                              padding: "4px 10px",
+                              borderRadius: "999px",
+                              textTransform: "capitalize",
+                            }}
+                          >
+                            Worker: {approvalStatus}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Transaction reference & fee details */}
+                      <div
+                        style={{
+                          background: "#ffffff",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "8px",
+                          padding: "8px 12px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          fontSize: "0.82rem",
+                          flexWrap: "wrap",
+                          gap: "8px",
+                        }}
+                      >
+                        <div>
+                          <span style={{ color: "#64748b" }}>Fee: </span>
+                          <b style={{ color: "#0f172a" }}>₹{(p.amount_paise / 100).toFixed(0)} ({p.currency})</b>
+                          <span style={{ color: "#94a3b8", margin: "0 8px" }}>•</span>
+                          <span style={{ color: "#64748b" }}>UTR / Reference: </span>
+                          <b style={{ color: "#0284c7", fontFamily: "monospace", fontSize: "0.88rem" }}>{p.transaction_reference}</b>
+                        </div>
+
+                        <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                          Submitted: {p.created_at ? new Date(p.created_at).toLocaleString() : "Recently"}
+                        </div>
+                      </div>
+
+                      {p.rejection_reason && (
+                        <div style={{ fontSize: "0.75rem", color: "#dc2626", background: "#fef2f2", padding: "6px 10px", borderRadius: "6px" }}>
+                          <b>Rejection Reason:</b> {p.rejection_reason}
+                        </div>
+                      )}
+
+                      {/* Separate Authorized Admin Actions */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", paddingTop: "4px" }}>
+                        {/* 1. Payment verification actions */}
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          {!isVerified && (
+                            <button
+                              onClick={() => handleVerifyPayment(p.id)}
+                              disabled={verifyingPaymentId === p.id}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "6px 12px",
+                                borderRadius: "6px",
+                                background: "#16a34a",
+                                color: "#ffffff",
+                                fontSize: "0.75rem",
+                                fontWeight: "700",
+                                border: "none",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <Check size={13} />
+                              <span>{verifyingPaymentId === p.id ? "Verifying..." : "Verify Payment"}</span>
+                            </button>
+                          )}
+
+                          {!isRejected && (
+                            <button
+                              onClick={() => setShowRejectInputForId(showRejectInputForId === p.id ? null : p.id)}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "6px 12px",
+                                borderRadius: "6px",
+                                background: "#dc2626",
+                                color: "#ffffff",
+                                fontSize: "0.75rem",
+                                fontWeight: "700",
+                                border: "none",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <X size={13} />
+                              <span>Reject Payment</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* 2. Worker approval actions (Separate) */}
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          {approvalStatus !== "approved" && (
+                            <button
+                              onClick={() => handleReviewWorker(p.worker_id, true)}
+                              disabled={approvingWorkerId === p.worker_id}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "6px 12px",
+                                borderRadius: "6px",
+                                background: "#0284c7",
+                                color: "#ffffff",
+                                fontSize: "0.75rem",
+                                fontWeight: "700",
+                                border: "none",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <Check size={13} />
+                              <span>Approve Worker</span>
+                            </button>
+                          )}
+
+                          {approvalStatus !== "rejected" && (
+                            <button
+                              onClick={() => handleReviewWorker(p.worker_id, false)}
+                              disabled={approvingWorkerId === p.worker_id}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "6px 12px",
+                                borderRadius: "6px",
+                                background: "#475569",
+                                color: "#ffffff",
+                                fontSize: "0.75rem",
+                                fontWeight: "700",
+                                border: "none",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <X size={13} />
+                              <span>Reject Worker</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Rejection reason inline form */}
+                      {showRejectInputForId === p.id && (
+                        <div
+                          style={{
+                            background: "#fff1f2",
+                            border: "1px solid #fecdd3",
+                            borderRadius: "8px",
+                            padding: "8px 12px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <input
+                            type="text"
+                            placeholder="Enter rejection reason (e.g. UTR not found in bank)"
+                            value={rejectReason}
+                            onChange={(e) => setRejectReason(e.target.value)}
+                            style={{
+                              flex: 1,
+                              padding: "6px 10px",
+                              borderRadius: "6px",
+                              border: "1px solid #cbd5e1",
+                              fontSize: "0.8rem",
+                            }}
+                          />
+                          <button
+                            onClick={() => handleRejectPayment(p.id)}
+                            disabled={rejectingPaymentId === p.id}
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: "6px",
+                              background: "#dc2626",
+                              color: "#fff",
+                              border: "none",
+                              fontSize: "0.75rem",
+                              fontWeight: "700",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {rejectingPaymentId === p.id ? "Rejecting..." : "Confirm Rejection"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowRejectInputForId(null);
+                              setRejectReason("");
+                            }}
+                            style={{
+                              padding: "6px 10px",
+                              background: "none",
+                              border: "none",
+                              color: "#64748b",
+                              fontSize: "0.75rem",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })

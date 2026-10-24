@@ -79,8 +79,9 @@ export default function CustomerLoginPage({ lang = "en", defaultMode = "login" }
         return;
       }
 
-      // Authorized -> navigate to customer dashboard
-      navigate("/customer/dashboard");
+      // Authorized -> navigate to customer dashboard (preserving draft if pending)
+      const hasDraft = !!(sessionStorage.getItem("ws_pending_booking_draft") || localStorage.getItem("ws_pending_booking_draft"));
+      navigate("/customer/dashboard", { state: { restoreBookingDraft: hasDraft } });
     } catch (err) {
       console.error("Customer login error:", err);
       setErrorMsg(
@@ -139,16 +140,18 @@ export default function CustomerLoginPage({ lang = "en", defaultMode = "login" }
         city: city.trim(),
       });
 
+      const hasDraft = !!(sessionStorage.getItem("ws_pending_booking_draft") || localStorage.getItem("ws_pending_booking_draft"));
+
       // If active session is returned directly, proceed to dashboard
       if (regData?.session?.user) {
-        navigate("/customer/dashboard");
+        navigate("/customer/dashboard", { state: { restoreBookingDraft: hasDraft } });
         return;
       }
 
       // Auto sign in and proceed
       const authData = await loginUser({ email: email.trim(), password });
       if (authData?.user) {
-        navigate("/customer/dashboard");
+        navigate("/customer/dashboard", { state: { restoreBookingDraft: hasDraft } });
       }
     } catch (err) {
       console.error("Customer registration error:", err);
@@ -321,6 +324,31 @@ export default function CustomerLoginPage({ lang = "en", defaultMode = "login" }
             <div className="auth-alert error">
               <AlertCircle size={18} />
               <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {/* Booking draft notice */}
+          {(sessionStorage.getItem("ws_pending_booking_draft") || localStorage.getItem("ws_pending_booking_draft")) && (
+            <div
+              style={{
+                background: "#ecfdf5",
+                border: "1px solid #a7f3d0",
+                borderRadius: "10px",
+                padding: "10px 14px",
+                marginBottom: "1rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                color: "#065f46",
+                fontSize: "0.85rem",
+              }}
+            >
+              <CheckCircle2 size={18} color="#059669" style={{ flexShrink: 0 }} />
+              <span>
+                {isEn
+                  ? "Your booking details are safely saved. Sign in or register to submit your service request."
+                  : "మీ బుకింగ్ వివరాలు భద్రపరచబడ్డాయి. సమర్పించడానికి దయచేసి సైన్ ఇన్ అవ్వండి."}
+              </span>
             </div>
           )}
 

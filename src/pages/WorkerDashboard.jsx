@@ -106,7 +106,7 @@ export default function WorkerDashboard({ lang = "en", currentUser, onOpenAuth, 
           getWorkerProfile(currentUser.id).catch(() => null),
         ]);
 
-        if (profile?.skills && Array.isArray(profile.skills) && profile.skills.length > 0) {
+        if (profile?.skills && Array.isArray(profile.skills)) {
           setSkillsList(profile.skills);
         }
         if (profile?.service_area && typeof profile.service_area === "string") {
@@ -118,11 +118,11 @@ export default function WorkerDashboard({ lang = "en", currentUser, onOpenAuth, 
           setNewRequests(
             reqs.map((r, i) => ({
               id: r.id,
-              trade: r.service_category || "General Service",
+              trade: r.service_category || r.category_name || "General Service",
               priority: i === 0 ? "High Priority" : "Medium",
               priorityType: i === 0 ? "high" : "medium",
-              problem: r.description || "Service request from customer.",
-              location: `${r.locality || "Guntur"}, Andhra Pradesh`,
+              problem: r.description || r.problem_description || "Service request from customer.",
+              location: r.address || `${r.locality || r.city || "Guntur"}, Andhra Pradesh`,
               date: r.scheduled_at ? new Date(r.scheduled_at).toLocaleDateString() : "Upcoming",
               time: r.preferred_time || "10:00 AM",
               photos: 1,
@@ -181,37 +181,23 @@ export default function WorkerDashboard({ lang = "en", currentUser, onOpenAuth, 
 
     window.addEventListener("ws_booking_updated", handleLocalBookingUpdate);
     window.addEventListener("storage", handleLocalBookingUpdate);
+    window.addEventListener("focus", handleLocalBookingUpdate);
 
     return () => {
       supabase.removeChannel(channel);
       window.removeEventListener("ws_booking_updated", handleLocalBookingUpdate);
       window.removeEventListener("storage", handleLocalBookingUpdate);
+      window.removeEventListener("focus", handleLocalBookingUpdate);
     };
   }, [currentUser?.id]);
 
   // Accept Booking Request
   const handleAcceptRequest = async (requestItem) => {
-    setAcceptingId(requestItem.id);
-    setAcceptSuccessMsg(`Accepted request for ${requestItem.trade}!`);
-
     try {
-      if (!requestItem.id.startsWith("req-")) {
-        await acceptWorkerBooking(requestItem.id);
-      }
-
-      // Remove from new requests and add to active jobs
-      setNewRequests((prev) => prev.filter((r) => r.id !== requestItem.id));
-      setActiveJobs((prev) => [
-        {
-          id: requestItem.id,
-          service_category: requestItem.trade,
-          location: requestItem.location,
-          date: `${requestItem.date} • ${requestItem.time}`,
-          status: "Accepted",
-          statusType: "accepted",
-        },
-        ...prev,
-      ]);
+      setAcceptingId(requestItem.id);
+      await acceptWorkerBooking(requestItem.id);
+      setAcceptSuccessMsg(`Accepted request for ${requestItem.trade}!`);
+      await loadWorkerData();
 
       setTimeout(() => {
         setAcceptSuccessMsg("");
@@ -227,10 +213,8 @@ export default function WorkerDashboard({ lang = "en", currentUser, onOpenAuth, 
   // Decline Booking Request
   const handleDeclineRequest = async (requestId) => {
     try {
-      if (!requestId.startsWith("req-")) {
-        await declineWorkerBooking(requestId);
-      }
-      setNewRequests((prev) => prev.filter((r) => r.id !== requestId));
+      await declineWorkerBooking(requestId);
+      await loadWorkerData();
     } catch (err) {
       console.error("Decline error:", err);
     }
@@ -249,28 +233,8 @@ export default function WorkerDashboard({ lang = "en", currentUser, onOpenAuth, 
   const handleUpdateJobStatus = async (jobId, newStatus) => {
     try {
       setStatusUpdatingId(jobId);
-      if (!jobId.startsWith("req-")) {
-        await updateWorkerJobStatus(jobId, newStatus);
-      }
-
-      if (newStatus === "Completed") {
-        const completedJob = activeJobs.find((j) => j.id === jobId);
-        setActiveJobs((prev) => prev.filter((j) => j.id !== jobId));
-        if (completedJob) {
-          setHistoryJobs((prev) => [
-            {
-              ...completedJob,
-              status: "Completed",
-              date: "Today",
-            },
-            ...prev,
-          ]);
-        }
-      } else {
-        setActiveJobs((prev) =>
-          prev.map((j) => (j.id === jobId ? { ...j, status: newStatus } : j))
-        );
-      }
+      await updateWorkerJobStatus(jobId, newStatus);
+      await loadWorkerData();
     } catch (err) {
       alert(`Could not update job status: ${err.message}`);
     } finally {
@@ -289,6 +253,7 @@ export default function WorkerDashboard({ lang = "en", currentUser, onOpenAuth, 
       if (res?.skills) {
         setSkillsList(res.skills);
       }
+      await loadWorkerData();
       setSaveSkillsSuccessMsg(
         isEn
           ? `Successfully saved ${skillsList.length} skills! Customer catalog updated.`
@@ -622,16 +587,16 @@ export default function WorkerDashboard({ lang = "en", currentUser, onOpenAuth, 
                             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                               <span
                                 className={
-                                  job.status === "In Progress"
+                                  job.status === "In Progress" || job.status === "in_progress"
                                     ? "status-pill-in-progress"
-                                    : job.status === "On the Way"
+                                    : job.status === "On the Way" || job.status === "on_the_way"
                                     ? "status-pill-ontheway"
                                     : "status-pill-accepted"
                                 }
                               >
-                                {job.status}
+                                {job.status === "in_progress" ? "In Progress" : job.status === "on_the_way" ? "On the Way" : job.status}
                               </span>
-                              {job.status === "Accepted" && (
+                              {(job.status === "Accepted" || job.status === "accepted") && (
                                 <div style={{ display: "flex", gap: "4px" }}>
                                   <button
                                     style={{
@@ -648,7 +613,7 @@ export default function WorkerDashboard({ lang = "en", currentUser, onOpenAuth, 
                                       gap: "3px",
                                     }}
                                     disabled={statusUpdatingId === job.id}
-                                    onClick={() => handleUpdateJobStatus(job.id, "On the Way")}
+                                    onClick={() => handleUpdateJobStatus(job.id, "on_the_way")}
                                   >
                                     <Truck size={10} />
                                     <span>On the Way</span>
@@ -668,14 +633,14 @@ export default function WorkerDashboard({ lang = "en", currentUser, onOpenAuth, 
                                       gap: "3px",
                                     }}
                                     disabled={statusUpdatingId === job.id}
-                                    onClick={() => handleUpdateJobStatus(job.id, "In Progress")}
+                                    onClick={() => handleUpdateJobStatus(job.id, "in_progress")}
                                   >
                                     <Play size={10} />
                                     <span>Start Job</span>
                                   </button>
                                 </div>
                               )}
-                              {job.status === "On the Way" && (
+                              {(job.status === "On the Way" || job.status === "on_the_way") && (
                                 <button
                                   style={{
                                     background: "#0284c7",
@@ -691,13 +656,13 @@ export default function WorkerDashboard({ lang = "en", currentUser, onOpenAuth, 
                                     gap: "3px",
                                   }}
                                   disabled={statusUpdatingId === job.id}
-                                  onClick={() => handleUpdateJobStatus(job.id, "In Progress")}
+                                  onClick={() => handleUpdateJobStatus(job.id, "in_progress")}
                                 >
                                   <Play size={10} />
                                   <span>Start Job</span>
                                 </button>
                               )}
-                              {job.status === "In Progress" && (
+                              {(job.status === "In Progress" || job.status === "in_progress") && (
                                 <button
                                   style={{
                                     background: "#10b981",

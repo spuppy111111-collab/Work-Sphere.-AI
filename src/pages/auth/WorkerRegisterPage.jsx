@@ -135,8 +135,8 @@ export default function WorkerRegisterPage({ lang = "en" }) {
         console.warn("Auto sign-in note:", loginErr);
       }
 
-      // Open workers dashboard immediately
-      navigate("/worker/dashboard");
+      // Direct worker to ₹25 registration payment page
+      navigate("/worker/payment");
     } catch (err) {
       console.error("Worker registration error:", err);
       setErrorMsg(

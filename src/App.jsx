@@ -22,6 +22,7 @@ import WorkerLoginPage from "./pages/auth/WorkerLoginPage";
 import WorkerRegisterPage from "./pages/auth/WorkerRegisterPage";
 import AdminLoginPage from "./pages/auth/AdminLoginPage";
 import PendingApprovalPage from "./pages/auth/PendingApprovalPage";
+import WorkerPaymentPage from "./pages/auth/WorkerPaymentPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MobileBottomNav from "./components/MobileBottomNav";
 
@@ -29,102 +30,120 @@ import {
   isSupabaseConfigured,
   supabase,
   getCurrentUserAndRole,
-  logoutUser
+  logoutUser,
+  getMyNotifications,
+  getCustomerBookings,
+  getNewServiceRequestsForWorker,
+  getWorkerActiveJobs,
+  getAllBookingsForAdmin,
+  getAllWorkerProfilesForAdmin
 } from "./lib/supabase";
 
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [currentUser, setCurrentUser] = useState(() => {
-    // Check localStorage for active session or demo session
-    const cached = localStorage.getItem("worksphere_active_user");
-    if (cached) {
-      try { return JSON.parse(cached); } catch (_) {}
-    }
-    return null;
-  });
-
-  const [currentRole, setCurrentRole] = useState(() => {
-    return localStorage.getItem("worksphere_active_role") || null;
-  });
-
+  const [currentUser, setCurrentUser] = useState(null);
+  const [currentRole, setCurrentRole] = useState(null);
   const [lang, setLang] = useState("en"); // 'en' | 'te'
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("customer-home");
   const [initialLoading, setInitialLoading] = useState(true);
 
-  // Restore current session from Supabase on mount
+  // Restore and maintain current session from Supabase
   useEffect(() => {
-    async function restoreSession() {
+    let isMounted = true;
+
+    async function applyUserSession(user, session) {
+      if (!isMounted) return;
+      if (!user) {
+        setCurrentUser(null);
+        setCurrentRole(null);
+        return;
+      }
+
+      try {
+        const authData = await getCurrentUserAndRole();
+        if (!isMounted) return;
+
+        if (authData?.user) {
+          const role = authData.role || null;
+          setCurrentUser({
+            id: authData.user.id,
+            email: authData.user.email,
+            name:
+              authData.profile?.full_name ||
+              authData.user.user_metadata?.full_name ||
+              authData.user.email?.split("@")[0],
+            phone: authData.profile?.phone || "",
+            city: authData.profile?.city || "Guntur",
+            role: role,
+            workerProfile: authData.workerProfile,
+          });
+          setCurrentRole(role);
+        } else {
+          setCurrentUser(null);
+          setCurrentRole(null);
+        }
+      } catch (err) {
+        console.error("Auth state update error:", err);
+        if (isMounted) {
+          setCurrentUser(null);
+          setCurrentRole(null);
+        }
+      }
+    }
+
+    async function initAuth() {
       try {
         if (isSupabaseConfigured && supabase) {
-          const authData = await getCurrentUserAndRole();
-          if (authData?.user) {
-            const role = authData.role || "customer";
-            const userObj = {
-              id: authData.user.id,
-              email: authData.user.email,
-              name:
-                authData.profile?.full_name ||
-                authData.user.user_metadata?.full_name ||
-                authData.user.email?.split("@")[0],
-              phone: authData.profile?.phone || "",
-              city: authData.profile?.city || "Guntur",
-              role: role,
-              workerProfile: authData.workerProfile,
-            };
-            setCurrentUser(userObj);
-            setCurrentRole(role);
-            localStorage.setItem("worksphere_active_user", JSON.stringify(userObj));
-            localStorage.setItem("worksphere_active_role", role);
+          // Check actual active session from Supabase
+          const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+          if (sessionErr) {
+            console.warn("Session check notice:", sessionErr.message);
+          }
+          if (session?.user) {
+            await applyUserSession(session.user, session);
+          } else {
+            const { data: { user } } = await supabase.auth.getUser();
+            await applyUserSession(user, null);
           }
         }
       } catch (err) {
         console.error("Session restore error:", err);
       } finally {
-        setInitialLoading(false);
+        if (isMounted) setInitialLoading(false);
       }
     }
 
-    restoreSession();
+    initAuth();
 
-    // Listen to Supabase auth transitions
+    // Listen to all Supabase auth transitions
     if (supabase) {
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === "SIGNED_IN" && session) {
-          const authData = await getCurrentUserAndRole();
-          if (authData?.user) {
-            const role = authData.role || "customer";
-            const userObj = {
-              id: authData.user.id,
-              email: authData.user.email,
-              name:
-                authData.profile?.full_name ||
-                authData.user.user_metadata?.full_name ||
-                authData.user.email?.split("@")[0],
-              phone: authData.profile?.phone || "",
-              city: authData.profile?.city || "Guntur",
-              role: role,
-              workerProfile: authData.workerProfile,
-            };
-            setCurrentUser(userObj);
-            setCurrentRole(role);
-            localStorage.setItem("worksphere_active_user", JSON.stringify(userObj));
-            localStorage.setItem("worksphere_active_role", role);
-          }
+        if (!isMounted) return;
+
+        if (
+          (event === "SIGNED_IN" ||
+            event === "INITIAL_SESSION" ||
+            event === "TOKEN_REFRESHED" ||
+            event === "USER_UPDATED") &&
+          session?.user
+        ) {
+          await applyUserSession(session.user, session);
         } else if (event === "SIGNED_OUT") {
           setCurrentUser(null);
           setCurrentRole(null);
-          localStorage.removeItem("worksphere_active_user");
-          localStorage.removeItem("worksphere_active_role");
         }
+
+        if (isMounted) setInitialLoading(false);
       });
 
       return () => {
+        isMounted = false;
         subscription?.unsubscribe();
       };
     }
@@ -132,94 +151,116 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      if (supabase) {
-        await logoutUser();
-      }
-    } catch (err) {
-      console.warn("Logout notice:", err);
-    } finally {
+      await logoutUser();
       setCurrentUser(null);
       setCurrentRole(null);
-      localStorage.removeItem("worksphere_active_user");
-      localStorage.removeItem("worksphere_active_role");
       navigate("/login");
+    } catch (err) {
+      console.error("Logout error:", err);
     }
   };
 
   const handleRoleSwitch = (newRole) => {
     if (newRole === currentRole) return;
-    if (newRole === "admin") navigate("/admin/dashboard");
-    else if (newRole === "worker") navigate("/worker/dashboard");
-    else navigate("/customer/dashboard");
-  };
-
-  // Quick allocation helper for demo testing or immediate dashboard entry
-  const allocateRoleAndNavigate = (role) => {
-    const defaultUsers = {
-      customer: {
-        id: "demo-customer-id",
-        email: "customer@worksphere.ai",
-        name: "Ramesh Varma",
-        phone: "+91 98765 43210",
-        city: "Guntur",
-        role: "customer",
-      },
-      worker: {
-        id: "demo-worker-id",
-        email: "worker@worksphere.ai",
-        name: "Koteswara Rao",
-        phone: "+91 98480 12345",
-        city: "Vijayawada",
-        role: "worker",
-        workerProfile: {
-          display_name: "Koteswara Rao",
-          trade: "Carpentry & Woodwork",
-          skills: ["Carpentry", "Wood Polish", "Modular Furniture"],
-          experience_years: 8,
-          city: "Vijayawada",
-          service_area: "Vijayawada & Krishna",
-          approval_status: "approved",
-          rating: 4.9,
-          total_jobs: 142
-        }
-      },
-      admin: {
-        id: "demo-admin-id",
-        email: "admin@worksphere.ai",
-        name: "Platform Administrator",
-        phone: "+91 90000 00001",
-        city: "Amaravati",
-        role: "admin",
-      }
-    };
-
-    const targetUser = defaultUsers[role] || defaultUsers.customer;
-    setCurrentUser(targetUser);
-    setCurrentRole(role);
-    localStorage.setItem("worksphere_active_user", JSON.stringify(targetUser));
-    localStorage.setItem("worksphere_active_role", role);
-
-    if (role === "admin") {
+    if (newRole === "admin" && currentRole === "admin") {
       navigate("/admin/dashboard");
-    } else if (role === "worker") {
+    } else if (newRole === "worker" && currentRole === "worker") {
       navigate("/worker/dashboard");
-    } else {
+    } else if (newRole === "customer" && currentRole === "customer") {
       navigate("/customer/dashboard");
+    } else {
+      if (newRole === "admin") navigate("/admin/login");
+      else if (newRole === "worker") navigate("/worker/login");
+      else navigate("/customer/login");
     }
   };
 
+  const [sharedStats, setSharedStats] = useState({
+    pendingWorkers: 0,
+    totalBookings: 0,
+    activeBookings: 0,
+    newRequests: 0,
+    activeJobs: 0,
+    unreadNotifications: 0,
+  });
+
+  const refreshSharedStats = async () => {
+    try {
+      if (currentUser?.id) {
+        const notifs = await getMyNotifications().catch(() => []);
+        const unread = (notifs || []).filter((n) => !n.is_read).length;
+
+        if (currentRole === "admin") {
+          const [apps, bks] = await Promise.all([
+            getAllWorkerProfilesForAdmin().catch(() => []),
+            getAllBookingsForAdmin().catch(() => []),
+          ]);
+          const pending = (apps || []).filter((w) => (w.approval_status || "").toLowerCase() === "pending").length;
+          setSharedStats({
+            pendingWorkers: pending,
+            totalBookings: (bks || []).length,
+            activeBookings: 0,
+            newRequests: 0,
+            activeJobs: 0,
+            unreadNotifications: unread,
+          });
+        } else if (currentRole === "worker") {
+          const [reqs, jobs] = await Promise.all([
+            getNewServiceRequestsForWorker(currentUser.id).catch(() => []),
+            getWorkerActiveJobs(currentUser.id).catch(() => []),
+          ]);
+          setSharedStats({
+            pendingWorkers: 0,
+            totalBookings: 0,
+            activeBookings: 0,
+            newRequests: (reqs || []).length,
+            activeJobs: (jobs || []).length,
+            unreadNotifications: unread,
+          });
+        } else {
+          const bks = await getCustomerBookings(currentUser.id).catch(() => []);
+          const active = (bks || []).filter((b) =>
+            !["Completed", "completed", "Cancelled", "cancelled", "Rejected", "rejected"].includes(b.status)
+          ).length;
+          setSharedStats({
+            pendingWorkers: 0,
+            totalBookings: (bks || []).length,
+            activeBookings: active,
+            newRequests: 0,
+            activeJobs: 0,
+            unreadNotifications: unread,
+          });
+        }
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    refreshSharedStats();
+
+    window.addEventListener("ws_booking_updated", refreshSharedStats);
+    window.addEventListener("storage", refreshSharedStats);
+
+    return () => {
+      window.removeEventListener("ws_booking_updated", refreshSharedStats);
+      window.removeEventListener("storage", refreshSharedStats);
+    };
+  }, [currentUser?.id, currentRole]);
+
   // Common Dashboard Shell
   const DashboardLayout = ({ role, children }) => {
-    const effectiveRole = role || currentRole || "customer";
+    const effectiveRole = role || currentRole || null;
 
-    // Ensure fallback user if accessing directly in development
-    const activeUser = currentUser || {
-      id: `dev-${effectiveRole}`,
-      email: `${effectiveRole}@worksphere.ai`,
-      name: effectiveRole === "admin" ? "Admin Supervisor" : effectiveRole === "worker" ? "Qualified Technician" : "Verified Customer",
-      city: "Guntur",
-      role: effectiveRole,
-    };
+    // Synchronize default tab with role when dashboard loads
+    useEffect(() => {
+      if (effectiveRole === "worker" && (!activeTab || !activeTab.startsWith("worker-"))) {
+        setActiveTab("worker-overview");
+      } else if (effectiveRole === "admin" && (!activeTab || activeTab.startsWith("worker-") || activeTab.startsWith("customer-"))) {
+        setActiveTab("overview");
+      } else if (effectiveRole === "customer" && (!activeTab || activeTab.startsWith("worker-") || activeTab === "overview")) {
+        setActiveTab("customer-home");
+      }
+    }, [effectiveRole]);
 
     return (
       <div className={`app-container ${effectiveRole === "customer" ? "customer-theme" : ""}`}>
@@ -230,16 +271,16 @@ export default function App() {
           isMobileOpen={isMobileOpen}
           setIsMobileOpen={setIsMobileOpen}
           lang={lang}
-          currentUser={activeUser}
+          currentUser={currentUser}
           onLogout={handleLogout}
-          stats={{ pendingWorkers: 0, activeBookings: 0, complaints: 0 }}
+          stats={sharedStats}
         />
 
         <div className="main-wrapper">
           <Topbar
             currentRole={effectiveRole}
             setCurrentRole={handleRoleSwitch}
-            currentUser={activeUser}
+            currentUser={currentUser}
             onLogout={handleLogout}
             onOpenAuth={() => navigate("/login")}
             activeTab={activeTab}
@@ -273,144 +314,191 @@ export default function App() {
     );
   };
 
+  // Smart dashboard redirection based on authenticated role
+  const RootRedirect = () => {
+    if (initialLoading) {
+      return (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "100vh",
+            background: "#0B221B",
+          }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              border: "3px solid rgba(255, 255, 255, 0.15)",
+              borderTopColor: "#D6B779",
+              borderRadius: "50%",
+              animation: "spin 0.8s linear infinite",
+            }}
+          />
+        </div>
+      );
+    }
+
+    if (!currentUser) {
+      return <Navigate to="/login" replace />;
+    }
+
+    if (currentRole === "admin") {
+      return <Navigate to="/admin/dashboard" replace />;
+    }
+
+    if (currentRole === "worker") {
+      return <Navigate to="/worker/dashboard" replace />;
+    }
+
+    if (currentRole === "customer") {
+      return <Navigate to="/customer/dashboard" replace />;
+    }
+
+    return <Navigate to="/login" replace />;
+  };
+
   return (
     <Routes>
-      {/* 1. Public Landing Page */}
-      <Route path="/" element={<HomePage onSelectRole={allocateRoleAndNavigate} />} />
-      <Route path="/home" element={<HomePage onSelectRole={allocateRoleAndNavigate} />} />
+      {/* 1. Common Role Selection Page */}
+      <Route path="/login" element={<RoleSelectionPage lang={lang} />} />
 
-      {/* 2. Three Logins Role Selection Screen */}
-      <Route
-        path="/login"
-        element={<RoleSelectionPage lang={lang} onDirectRoleSelect={allocateRoleAndNavigate} />}
-      />
-
-      {/* 3. Dedicated Login & Register Pages */}
+      {/* 2. Dedicated Login & Register Pages */}
       <Route path="/customer/login" element={<CustomerLoginPage lang={lang} defaultMode="login" />} />
       <Route path="/customer/register" element={<CustomerLoginPage lang={lang} defaultMode="register" />} />
       <Route path="/worker/login" element={<WorkerLoginPage lang={lang} />} />
       <Route path="/admin/login" element={<AdminLoginPage lang={lang} />} />
+
+      {/* 3. Worker Registration (7 required fields) */}
       <Route path="/worker/register" element={<WorkerRegisterPage lang={lang} />} />
+
+      {/* 4. Worker ₹25 Registration Payment & Status Pages */}
+      <Route path="/worker/payment" element={<WorkerPaymentPage lang={lang} />} />
       <Route path="/worker/application-status" element={<PendingApprovalPage lang={lang} />} />
       <Route path="/worker/pending" element={<PendingApprovalPage lang={lang} />} />
 
-      {/* 4. Step 3: Customer Dashboard */}
+      {/* 5. Protected Customer Dashboard & Bookings */}
       <Route
         path="/customer/dashboard/*"
         element={
-          <DashboardLayout role="customer">
-            <CustomerDashboard
-              lang={lang}
-              currentUser={currentUser || {
-                id: "customer-user",
-                email: "customer@worksphere.ai",
-                name: "Customer User",
-                city: "Guntur",
-                role: "customer"
-              }}
-              onOpenAuth={() => navigate("/customer/login")}
-              onNavigate={(tab) => setActiveTab(tab)}
-              activeTab={activeTab}
-            />
-          </DashboardLayout>
+          <ProtectedRoute
+            user={currentUser}
+            role={currentRole}
+            allowedRole="customer"
+            loading={initialLoading}
+            lang={lang}
+          >
+            <DashboardLayout role="customer">
+              <CustomerDashboard
+                lang={lang}
+                currentUser={currentUser}
+                onOpenAuth={() => navigate("/customer/login")}
+                onNavigate={(tab) => setActiveTab(tab)}
+                activeTab={activeTab}
+              />
+            </DashboardLayout>
+          </ProtectedRoute>
         }
       />
       <Route
         path="/customer/bookings"
         element={
-          <DashboardLayout role="customer">
-            <CustomerDashboard
-              lang={lang}
-              currentUser={currentUser || {
-                id: "customer-user",
-                email: "customer@worksphere.ai",
-                name: "Customer User",
-                city: "Guntur",
-                role: "customer"
-              }}
-              onOpenAuth={() => navigate("/customer/login")}
-              onNavigate={(tab) => setActiveTab(tab)}
-              activeTab="customer-bookings"
-            />
-          </DashboardLayout>
+          <ProtectedRoute
+            user={currentUser}
+            role={currentRole}
+            allowedRole="customer"
+            loading={initialLoading}
+            lang={lang}
+          >
+            <DashboardLayout role="customer">
+              <CustomerDashboard
+                lang={lang}
+                currentUser={currentUser}
+                onOpenAuth={() => navigate("/customer/login")}
+                onNavigate={(tab) => setActiveTab(tab)}
+                activeTab="customer-bookings"
+              />
+            </DashboardLayout>
+          </ProtectedRoute>
         }
       />
 
-      {/* 5. Step 4: Worker Dashboard */}
+      {/* 6. Protected Worker Dashboard & Requests */}
       <Route
         path="/worker/dashboard/*"
         element={
-          <DashboardLayout role="worker">
-            <WorkerDashboard
-              lang={lang}
-              currentUser={currentUser || {
-                id: "worker-user",
-                email: "worker@worksphere.ai",
-                name: "Skilled Worker",
-                city: "Vijayawada",
-                role: "worker"
-              }}
-              onOpenAuth={() => navigate("/worker/login")}
-              activeTab={activeTab}
-            />
-          </DashboardLayout>
+          <ProtectedRoute
+            user={currentUser}
+            role={currentRole}
+            allowedRole="worker"
+            loading={initialLoading}
+            lang={lang}
+          >
+            <DashboardLayout role="worker">
+              <WorkerDashboard
+                lang={lang}
+                currentUser={currentUser}
+                onOpenAuth={() => navigate("/worker/login")}
+                activeTab={activeTab}
+              />
+            </DashboardLayout>
+          </ProtectedRoute>
         }
       />
       <Route
         path="/worker/requests"
         element={
-          <DashboardLayout role="worker">
-            <WorkerDashboard
-              lang={lang}
-              currentUser={currentUser || {
-                id: "worker-user",
-                email: "worker@worksphere.ai",
-                name: "Skilled Worker",
-                city: "Vijayawada",
-                role: "worker"
-              }}
-              onOpenAuth={() => navigate("/worker/login")}
-              activeTab="worker-overview"
-            />
-          </DashboardLayout>
+          <ProtectedRoute
+            user={currentUser}
+            role={currentRole}
+            allowedRole="worker"
+            loading={initialLoading}
+            lang={lang}
+          >
+            <DashboardLayout role="worker">
+              <WorkerDashboard
+                lang={lang}
+                currentUser={currentUser}
+                onOpenAuth={() => navigate("/worker/login")}
+                activeTab="worker-overview"
+              />
+            </DashboardLayout>
+          </ProtectedRoute>
         }
       />
 
-      {/* 6. Step 5: Admin Dashboard */}
+      {/* 7. Protected Admin Dashboard */}
+      <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
       <Route
         path="/admin/dashboard/*"
         element={
-          <DashboardLayout role="admin">
-            <AdminDashboard
-              lang={lang}
-              currentUser={currentUser || {
-                id: "admin-user",
-                email: "admin@worksphere.ai",
-                name: "Administrator",
-                role: "admin"
-              }}
-              onOpenAuth={() => navigate("/admin/login")}
-              onNavigate={(tab) => setActiveTab(tab)}
-            />
-          </DashboardLayout>
+          <ProtectedRoute
+            user={currentUser}
+            role={currentRole}
+            allowedRole="admin"
+            loading={initialLoading}
+            lang={lang}
+          >
+            <DashboardLayout role="admin">
+              <AdminDashboard
+                lang={lang}
+                currentUser={currentUser}
+                onOpenAuth={() => navigate("/admin/login")}
+                onNavigate={(tab) => setActiveTab(tab)}
+              />
+            </DashboardLayout>
+          </ProtectedRoute>
         }
       />
 
-      {/* 7. Direct Dashboard Redirect Route */}
-      <Route
-        path="/dashboard/*"
-        element={
-          currentRole === "admin" ? (
-            <Navigate to="/admin/dashboard" replace />
-          ) : currentRole === "worker" ? (
-            <Navigate to="/worker/dashboard" replace />
-          ) : (
-            <Navigate to="/customer/dashboard" replace />
-          )
-        }
-      />
+      {/* 8. Dedicated General Dashboard Route -> redirects based on actual role */}
+      <Route path="/dashboard/*" element={<RootRedirect />} />
 
-      {/* Fallback */}
+      {/* Public Pages */}
+      <Route path="/" element={<HomePage lang={lang} />} />
+      <Route path="/home" element={<HomePage lang={lang} />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

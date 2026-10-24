@@ -50,16 +50,16 @@ export default function Sidebar({
       case "admin":
         return [
           { id: "overview", label: isEn ? "Dashboard" : "డాష్‌బోర్డ్", icon: LayoutDashboard },
-          { id: "workers", label: isEn ? "Worker Applications" : "కార్మికుల దరఖాస్తులు", icon: Users, badge: 5, badgeBg: "#ef4444" },
+          { id: "workers", label: isEn ? "Worker Applications" : "కార్మికుల దరఖాస్తులు", icon: Users, badge: stats.pendingWorkers > 0 ? stats.pendingWorkers : null, badgeBg: "#ef4444" },
           { id: "approved-workers", label: isEn ? "Workers" : "కార్మికులు", icon: UserCheck },
           { id: "customers", label: isEn ? "Customers" : "కస్టమర్లు", icon: User },
-          { id: "bookings", label: isEn ? "Bookings" : "బుకింగ్‌లు", icon: CalendarCheck },
+          { id: "bookings", label: isEn ? "Bookings" : "బుకింగ్‌లు", icon: CalendarCheck, badge: stats.totalBookings > 0 ? stats.totalBookings : null, badgeBg: "#0284c7" },
           { id: "services", label: isEn ? "Services" : "సేవలు", icon: Wrench },
           { id: "categories", label: isEn ? "Categories" : "కేటగిరీలు", icon: Grid },
           { id: "reviews", label: isEn ? "Reviews" : "రివ్యూలు", icon: Star },
           { id: "reports", label: isEn ? "Reports" : "నివేదికలు", icon: BarChart3 },
           { id: "users", label: isEn ? "Users" : "యూజర్లు", icon: Users },
-          { id: "notifications", label: isEn ? "Notifications" : "నోటిఫికేషన్లు", icon: Bell },
+          { id: "notifications", label: isEn ? "Notifications" : "నోటిఫికేషన్లు", icon: Bell, badge: stats.unreadNotifications > 0 ? stats.unreadNotifications : null, badgeBg: "#ef4444" },
           { id: "settings", label: isEn ? "Settings" : "సెట్టింగులు", icon: Settings },
         ];
       case "customer":
@@ -67,8 +67,8 @@ export default function Sidebar({
           { id: "customer-home", label: isEn ? "Dashboard" : "డాష్‌బోర్డ్", icon: LayoutDashboard },
           { id: "browse-services", label: isEn ? "Browse Services" : "సేవలు బ్రౌజ్ చేయండి", icon: Grid },
           { id: "book-service", label: isEn ? "Find a Worker" : "కార్మికుడిని కనుగొనండి", icon: Users },
-          { id: "customer-bookings", label: isEn ? "My Bookings" : "నా బుకింగ్‌లు", icon: CalendarCheck, badge: 2, badgeBg: "#ef4444" },
-          { id: "customer-notifications", label: isEn ? "Notifications" : "నోటిఫికేషన్లు", icon: Bell, badge: 3, badgeBg: "#ef4444" },
+          { id: "customer-bookings", label: isEn ? "My Bookings" : "నా బుకింగ్‌లు", icon: CalendarCheck, badge: stats.activeBookings > 0 ? stats.activeBookings : null, badgeBg: "#0284c7" },
+          { id: "customer-notifications", label: isEn ? "Notifications" : "నోటిఫికేషన్లు", icon: Bell, badge: stats.unreadNotifications > 0 ? stats.unreadNotifications : null, badgeBg: "#ef4444" },
           { id: "saved-workers", label: isEn ? "Saved Workers" : "సేవ్ చేసిన కార్మికులు", icon: Bookmark },
           { id: "customer-profile", label: isEn ? "My Profile" : "నా ప్రొఫైల్", icon: User },
           { id: "help-support", label: isEn ? "Help & Support" : "సహాయం & మద్దతు", icon: HelpCircle },
@@ -76,8 +76,8 @@ export default function Sidebar({
       case "worker":
         return [
           { id: "worker-overview", label: isEn ? "Dashboard" : "డాష్‌బోర్డ్", icon: LayoutDashboard },
-          { id: "worker-requests", label: isEn ? "New Requests" : "కొత్త అభ్యర్థనలు", icon: Clock, badge: 5, badgeBg: "#ef4444" },
-          { id: "worker-active", label: isEn ? "My Active Jobs" : "ప్రస్తుత పనులు", icon: CalendarCheck, badge: 2, badgeBg: "#0284c7" },
+          { id: "worker-requests", label: isEn ? "New Requests" : "కొత్త అభ్యర్థనలు", icon: Clock, badge: stats.newRequests > 0 ? stats.newRequests : null, badgeBg: "#ef4444" },
+          { id: "worker-active", label: isEn ? "My Active Jobs" : "ప్రస్తుత పనులు", icon: CalendarCheck, badge: stats.activeJobs > 0 ? stats.activeJobs : null, badgeBg: "#0284c7" },
           { id: "worker-history", label: isEn ? "Booking History" : "చరిత్ర", icon: CheckCircle },
           { id: "worker-skills", label: isEn ? "My Skills" : "నైపుణ్యాలు", icon: Sliders },
           { id: "worker-areas", label: isEn ? "Service Areas" : "ప్రాంతాలు", icon: MapPin },

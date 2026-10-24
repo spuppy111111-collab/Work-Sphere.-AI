@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Sparkles,
   MapPin,
@@ -49,6 +50,7 @@ import {
 import { CATEGORIES, analyzeProblemDescription } from "../data/initialData";
 import { SERVICE_GROUPS, SERVICE_CATEGORIES, getCategoryById, searchCatalog } from "../data/serviceCatalog";
 import CategoryIcon from "../components/CategoryIcon";
+import AuthLoginScreen from "../components/AuthLoginScreen";
 import {
   createCustomerBooking,
   getCustomerBookings,
@@ -77,6 +79,7 @@ export default function CustomerDashboard({
   onNavigate,
   activeTab = "customer-home",
 }) {
+  const navigate = useNavigate();
   const isEn = lang === "en";
   const greeting = useTimeGreeting(lang);
 
@@ -87,12 +90,14 @@ export default function CustomerDashboard({
   // Data states
   const [bookings, setBookings] = useState([]);
   const [workersList, setWorkersList] = useState([]);
+  const [workersLoading, setWorkersLoading] = useState(false);
+  const [workersError, setWorkersError] = useState(null);
   const [notificationsList, setNotificationsList] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // 50 Service Catalogue & Search States
   const [serviceCatalogue, setServiceCatalogue] = useState(SERVICE_CATEGORIES);
-  const [categoryViewMode, setCategoryViewMode] = useState("grid"); // "grid" cards default as requested
+  const [categoryViewMode, setCategoryViewMode] = useState("linewise"); // "linewise" by default as requested
   const [selectedGroupFilter, setSelectedGroupFilter] = useState("all");
   const [catalogSearch, setCatalogSearch] = useState("");
   const [selectedSubService, setSelectedSubService] = useState("Pipe Leakage Repair");
@@ -109,13 +114,24 @@ export default function CustomerDashboard({
   // AI Diagnostic Search in Hero
   const [problemText, setProblemText] = useState("");
 
-  // Saved Workers List (Step 11)
-  const [savedWorkerIds, setSavedWorkerIds] = useState(["w-1", "w-3"]);
+  // Saved Workers List (Stored in localStorage)
+  const [savedWorkerIds, setSavedWorkerIds] = useState(() => {
+    try {
+      const s = localStorage.getItem("ws_saved_workers");
+      return s ? JSON.parse(s) : [];
+    } catch (_) {
+      return [];
+    }
+  });
 
   const toggleSaveWorker = (workerId) => {
-    setSavedWorkerIds((prev) =>
-      prev.includes(workerId) ? prev.filter((id) => id !== workerId) : [...prev, workerId]
-    );
+    setSavedWorkerIds((prev) => {
+      const next = prev.includes(workerId) ? prev.filter((id) => id !== workerId) : [...prev, workerId];
+      try {
+        localStorage.setItem("ws_saved_workers", JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
   };
 
   // Support / Dispute Form State
@@ -142,6 +158,18 @@ export default function CustomerDashboard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [bookingConfirmation, setBookingConfirmation] = useState(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Auto-resume booking submission after user signs in via AuthLoginScreen
+  const handleAuthSuccess = async (authData) => {
+    setIsAuthModalOpen(false);
+    setFormError("");
+    if (authData?.user) {
+      setTimeout(() => {
+        handleSubmitBooking({ preventDefault: () => {} });
+      }, 200);
+    }
+  };
 
   // Worker Profile Details Modal
   const [selectedWorkerProfile, setSelectedWorkerProfile] = useState(null);
@@ -177,13 +205,38 @@ export default function CustomerDashboard({
   // Bookings filter
   const [statusFilter, setStatusFilter] = useState("all");
 
+  // Dedicated function to fetch approved and genuinely available workers from Supabase
+  const fetchEligibleWorkers = useCallback(async (cat = selectedCategoryFilter, loc = selectedCityFilter, search = workerSearchTerm) => {
+    try {
+      setWorkersLoading(true);
+      setWorkersError(null);
+      const data = await getApprovedWorkersForCustomer({
+        category: cat,
+        city: loc,
+        search: search,
+      });
+      // Strictly store genuine Supabase workers
+      setWorkersList(data || []);
+    } catch (err) {
+      console.error("Error fetching eligible workers:", err);
+      setWorkersError("Unable to fetch available workers from database.");
+      setWorkersList([]); // Never show unfiltered or fake workers on error
+    } finally {
+      setWorkersLoading(false);
+    }
+  }, [selectedCategoryFilter, selectedCityFilter, workerSearchTerm]);
+
   // Load customer data, workers and notifications
   const loadCustomerData = async () => {
     try {
       setLoading(true);
 
       const [workers, notifs, cats] = await Promise.all([
-        getApprovedWorkersForCustomer({ category: selectedCategoryFilter, search: workerSearchTerm }).catch(() => []),
+        getApprovedWorkersForCustomer({
+          category: selectedCategoryFilter,
+          city: selectedCityFilter,
+          search: workerSearchTerm,
+        }).catch(() => []),
         getMyNotifications().catch(() => []),
         getServiceCatalogue().catch(() => SERVICE_CATEGORIES),
       ]);
@@ -207,11 +260,16 @@ export default function CustomerDashboard({
     }
   };
 
+  // Re-fetch workers from Supabase whenever category, location, or search term changes
+  useEffect(() => {
+    fetchEligibleWorkers(selectedCategoryFilter, selectedCityFilter, workerSearchTerm);
+  }, [selectedCategoryFilter, selectedCityFilter, workerSearchTerm, fetchEligibleWorkers]);
+
   useEffect(() => {
     loadCustomerData();
 
     // Supabase Realtime subscription for instant booking updates
-    const channel = supabase
+    const bookingChannel = supabase
       .channel("customer-bookings-realtime")
       .on(
         "postgres_changes",
@@ -226,20 +284,77 @@ export default function CustomerDashboard({
       )
       .subscribe();
 
+    // Supabase Realtime subscription for worker approval & availability changes
+    const workerChannel = supabase
+      .channel("customer-worker-profiles-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "worker_profiles",
+        },
+        () => {
+          fetchEligibleWorkers();
+        }
+      )
+      .subscribe();
+
     // Cross-tab and local-storage event listener for instant local sync
     const handleLocalBookingUpdate = () => {
       loadCustomerData();
+      fetchEligibleWorkers();
     };
 
     window.addEventListener("ws_booking_updated", handleLocalBookingUpdate);
     window.addEventListener("storage", handleLocalBookingUpdate);
+    window.addEventListener("focus", handleLocalBookingUpdate);
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(bookingChannel);
+      supabase.removeChannel(workerChannel);
       window.removeEventListener("ws_booking_updated", handleLocalBookingUpdate);
       window.removeEventListener("storage", handleLocalBookingUpdate);
+      window.removeEventListener("focus", handleLocalBookingUpdate);
     };
-  }, [currentUser?.id, selectedCategoryFilter]);
+  }, [currentUser?.id, fetchEligibleWorkers]);
+
+  // Restore saved booking draft after customer signs in or registers
+  useEffect(() => {
+    try {
+      const rawDraft =
+        sessionStorage.getItem("ws_pending_booking_draft") ||
+        localStorage.getItem("ws_pending_booking_draft");
+
+      if (rawDraft) {
+        const draft = JSON.parse(rawDraft);
+        if (draft && typeof draft === "object") {
+          if (draft.bookingCategory) setBookingCategory(draft.bookingCategory);
+          if (draft.selectedSubService) setSelectedSubService(draft.selectedSubService);
+          if (draft.selectedWorkerForBooking) setSelectedWorkerForBooking(draft.selectedWorkerForBooking);
+          if (draft.formProblem) setFormProblem(draft.formProblem);
+          if (draft.locality) setLocality(draft.locality);
+          if (draft.pincode) setPincode(draft.pincode);
+          if (draft.address) setAddress(draft.address);
+          if (draft.preferredDate) setPreferredDate(draft.preferredDate);
+          if (draft.preferredTime) setPreferredTime(draft.preferredTime);
+          if (draft.contactName) setContactName(draft.contactName);
+          if (draft.contactPhone) setContactPhone(draft.contactPhone);
+          if (draft.notes) setNotes(draft.notes);
+
+          // Clear any error and pop open the booking modal with data restored
+          setFormError("");
+          setIsBookingModalOpen(true);
+
+          // Clean up stored draft so subsequent normal refreshes do not re-open modal
+          sessionStorage.removeItem("ws_pending_booking_draft");
+          localStorage.removeItem("ws_pending_booking_draft");
+        }
+      }
+    } catch (err) {
+      console.warn("Could not restore booking draft:", err);
+    }
+  }, [currentUser?.id]);
 
   // Keep tracking modal synchronized with latest booking state
   useEffect(() => {
@@ -286,6 +401,18 @@ export default function CustomerDashboard({
 
   // Open booking modal for a category, sub-service or specific worker (Step 7 -> Step 8)
   function handleOpenBooking(categoryName, worker = null, initialProblem = "", subServiceName = "") {
+    if (worker) {
+      const isApproved = String(worker.approval_status || "").trim().toLowerCase() === "approved";
+      const isAvailable = worker.is_available === true;
+      if (!isApproved || !isAvailable) {
+        alert(
+          isEn
+            ? "This worker is currently unavailable or awaiting administrator approval. Please select an active available worker."
+            : "ఈ కార్మికుడు ప్రస్తుతం అందుబాటులో లేరు లేదా అడ్మిన్ ఆమోదం కోసం వేచి ఉన్నారు."
+        );
+        return;
+      }
+    }
     const catObj = getCategoryById(categoryName || "Plumbing");
     const canonicalCat = catObj?.name || "Plumbing";
     setBookingCategory(canonicalCat);
@@ -321,10 +448,7 @@ export default function CustomerDashboard({
   // Submit booking (Step 6 -> Step 7)
   async function handleSubmitBooking(e) {
     e.preventDefault();
-    if (!currentUser) {
-      if (onOpenAuth) onOpenAuth();
-      return;
-    }
+    if (isSubmitting) return;
 
     setFormError("");
 
@@ -347,10 +471,84 @@ export default function CustomerDashboard({
       return;
     }
 
+    // 1. Verify actual Supabase authentication session
+    let activeUser = null;
+    let authError = null;
+
+    try {
+      const { data: userData, error: uErr } = await supabase.auth.getUser();
+      if (uErr) authError = uErr;
+      if (userData?.user) {
+        activeUser = userData.user;
+      }
+    } catch (err) {
+      authError = err;
+    }
+
+    let sessionActive = false;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      sessionActive = Boolean(sessionData?.session);
+      if (!activeUser && sessionData?.session?.user) {
+        activeUser = sessionData.session.user;
+        authError = null;
+      }
+    } catch (_) {}
+
+    // Fallback to validated currentUser prop if available
+    if (!activeUser && currentUser?.id) {
+      activeUser = currentUser;
+      authError = null;
+    }
+
+    // Safe dev diagnostic output (never exposing tokens, passwords, or keys)
+    if (import.meta.env?.DEV) {
+      console.log("[Customer Booking Submit Auth Diagnostics]", {
+        hasAuthenticatedUser: !!activeUser,
+        authUserId: activeUser?.id,
+        currentUserPropId: currentUser?.id,
+        sessionActive,
+        error: authError?.message || null,
+      });
+    }
+
+    // If genuinely signed out: preserve booking draft and open inline auth dialog
+    if (!activeUser) {
+      const draft = {
+        bookingCategory,
+        selectedSubService,
+        selectedWorkerForBooking,
+        formProblem,
+        locality,
+        pincode: pincode.trim(),
+        address: address.trim(),
+        preferredDate,
+        preferredTime,
+        contactName,
+        contactPhone,
+        notes,
+        savedAt: Date.now(),
+      };
+
+      try {
+        sessionStorage.setItem("ws_pending_booking_draft", JSON.stringify(draft));
+        localStorage.setItem("ws_pending_booking_draft", JSON.stringify(draft));
+      } catch (err) {
+        console.warn("Could not save booking draft:", err);
+      }
+
+      setFormError(isEn ? "Please sign in to submit a service request." : "దయచేసి సర్వీస్ అభ్యర్థనను సమర్పించడానికి సైన్ ఇన్ చేయండి.");
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    // 2. Customer is authenticated: proceed with database insert
     try {
       setIsSubmitting(true);
       const catObj = getCategoryById(bookingCategory);
       const subObj = catObj?.services?.find((s) => s.name === selectedSubService);
+
+      const targetWorkerId = selectedWorkerForBooking?.user_id || selectedWorkerForBooking?.id || null;
 
       const newBooking = await createCustomerBooking({
         problemDescription: formProblem || `Service Request for ${selectedSubService || bookingCategory}`,
@@ -365,14 +563,22 @@ export default function CustomerDashboard({
         preferredTime,
         notes,
         photoFile,
-        workerId: selectedWorkerForBooking?.user_id || selectedWorkerForBooking?.id || null,
+        workerId: targetWorkerId,
       });
 
-      // Show Step 7 Booking Confirmation Screen
-      const bookingIdDisplay = newBooking?.id ? `#BK-${newBooking.id.substring(0, 8).toUpperCase()}` : `#BK-${Date.now().toString(36).toUpperCase()}`;
+      // Clear draft after successful creation
+      sessionStorage.removeItem("ws_pending_booking_draft");
+      localStorage.removeItem("ws_pending_booking_draft");
+
+      // Show Step 7 Booking Confirmation Screen with real Supabase Booking ID
+      const bookingIdDisplay = newBooking?.id
+        ? `#BK-${newBooking.id.substring(0, 8).toUpperCase()}`
+        : `#BK-${Date.now().toString(36).toUpperCase()}`;
+
       setBookingConfirmation({
         bookingId: bookingIdDisplay,
-        status: "Pending",
+        rawId: newBooking?.id,
+        status: newBooking?.status || "Pending",
         serviceCategory: `${bookingCategory} — ${selectedSubService || "Standard Service"}`,
         workerName: selectedWorkerForBooking?.display_name || "Assigned to nearest verified artisan",
         preferredDate,
@@ -381,13 +587,46 @@ export default function CustomerDashboard({
         address: address.trim(),
       });
 
-      // Refresh customer bookings
-      const updated = await getCustomerBookings(currentUser.id);
+      // Refresh customer bookings from real database
+      const updated = await getCustomerBookings(activeUser.id);
       if (updated && updated.length > 0) {
         setBookings(updated);
       }
+
+      // Notify application and other views to update counts
+      window.dispatchEvent(
+        new CustomEvent("ws_booking_updated", {
+          detail: { bookingId: newBooking?.id, booking: newBooking },
+        })
+      );
     } catch (err) {
-      console.error("Booking error:", err);
+      console.error("Booking submission error:", err);
+      // If error was session-related, save draft and prompt login
+      if (err.message && err.message.toLowerCase().includes("please sign in")) {
+        const draft = {
+          bookingCategory,
+          selectedSubService,
+          selectedWorkerForBooking,
+          formProblem,
+          locality,
+          pincode: pincode.trim(),
+          address: address.trim(),
+          preferredDate,
+          preferredTime,
+          contactName,
+          contactPhone,
+          notes,
+          savedAt: Date.now(),
+        };
+        try {
+          sessionStorage.setItem("ws_pending_booking_draft", JSON.stringify(draft));
+          localStorage.setItem("ws_pending_booking_draft", JSON.stringify(draft));
+        } catch (_) {}
+
+        setFormError(err.message);
+        setIsAuthModalOpen(true);
+        return;
+      }
       setFormError(err.message || "Failed to submit booking request.");
     } finally {
       setIsSubmitting(false);
@@ -535,42 +774,65 @@ export default function CustomerDashboard({
     return st === statusFilter;
   });
 
-  // Filtered Workers for Find a Worker Tab (Step 6)
+  // Filtered Workers for Find a Worker Tab
   const displayedWorkers = workersList.filter((worker) => {
-    // Location filter
-    if (selectedCityFilter && selectedCityFilter !== "All Cities") {
-      const city = (worker.city || "").toLowerCase();
-      if (!city.includes(selectedCityFilter.toLowerCase())) return false;
+    // 1. Mandatory eligibility: only approved, genuinely available workers with valid profile data
+    if (!worker || !worker.user_id || !worker.display_name) return false;
+    const isApproved = String(worker.approval_status || "").trim().toLowerCase() === "approved";
+    const isAvailable = worker.is_available === true;
+    if (!isApproved || !isAvailable) return false;
+
+    // 2. Category / Trade / Saved Skills filter
+    // A worker appears under a category ONLY when their saved skills actually include that category (or trade matches)
+    if (selectedCategoryFilter && selectedCategoryFilter !== "all") {
+      const target = selectedCategoryFilter.toLowerCase().trim();
+      const trade = (worker.trade || "").toLowerCase().trim();
+      const skills = Array.isArray(worker.skills)
+        ? worker.skills.map((s) => (s || "").toLowerCase().trim())
+        : [(worker.skills || "").toLowerCase().trim()];
+      const matchTrade = trade === target || trade.includes(target) || target.includes(trade);
+      const matchSkills = skills.some((s) => s === target || s.includes(target) || target.includes(s));
+      if (!matchTrade && !matchSkills) return false;
     }
-    // Rating filter
+
+    // 3. Location / Service Area filter
+    if (selectedCityFilter && selectedCityFilter !== "All Cities") {
+      const targetCity = selectedCityFilter.toLowerCase().trim();
+      const city = (worker.city || "").toLowerCase().trim();
+      const area = (worker.service_area || "").toLowerCase().trim();
+      if (targetCity === "guntur") {
+        const gunturLocalities = [
+          "guntur", "brodipet", "arundelpet", "lakshmipuram", "pattabhipuram",
+          "koretipadu", "vidyanagar", "syamalanagar", "gujanagundla", "amaravathi", "old guntur"
+        ];
+        const match = gunturLocalities.some((loc) => city.includes(loc) || area.includes(loc)) || !city;
+        if (!match) return false;
+      } else {
+        if (!city.includes(targetCity) && !area.includes(targetCity)) return false;
+      }
+    }
+
+    // 4. Rating filter
     if (selectedRatingFilter && selectedRatingFilter !== "all") {
-      const workerRating = Number(worker.rating || 4.9);
+      const workerRating = Number(worker.rating || 5.0);
       if (workerRating < Number(selectedRatingFilter)) return false;
     }
-    // Availability filter
+
+    // 5. Availability filter
     if (selectedAvailabilityFilter && selectedAvailabilityFilter !== "all") {
       const avail = (worker.availability || "Available Today").toLowerCase();
       if (!avail.includes(selectedAvailabilityFilter.toLowerCase())) return false;
     }
-    // Category / Trade / Skills filter
-    if (selectedCategoryFilter && selectedCategoryFilter !== "all") {
-      const trade = (worker.trade || "").toLowerCase();
-      const skills = Array.isArray(worker.skills)
-        ? worker.skills.map((s) => (s || "").toLowerCase())
-        : [(worker.skills || "").toLowerCase()];
-      const target = selectedCategoryFilter.toLowerCase();
-      const matchTrade = trade.includes(target) || target.includes(trade);
-      const matchSkills = skills.some((s) => s.includes(target) || target.includes(s));
-      if (!matchTrade && !matchSkills) return false;
-    }
-    // Search Term (Name, Trade, City, Skills)
+
+    // 6. Search Term (Name, Trade, City, Service Area, Skills)
     if (workerSearchTerm && workerSearchTerm.trim()) {
-      const term = workerSearchTerm.toLowerCase();
+      const term = workerSearchTerm.toLowerCase().trim();
       const name = (worker.display_name || "").toLowerCase();
       const trade = (worker.trade || "").toLowerCase();
       const city = (worker.city || "").toLowerCase();
+      const area = (worker.service_area || "").toLowerCase();
       const skills = Array.isArray(worker.skills) ? worker.skills.join(" ").toLowerCase() : (worker.skills || "").toLowerCase();
-      if (!name.includes(term) && !trade.includes(term) && !city.includes(term) && !skills.includes(term)) {
+      if (!name.includes(term) && !trade.includes(term) && !city.includes(term) && !area.includes(term) && !skills.includes(term)) {
         return false;
       }
     }
@@ -1376,25 +1638,25 @@ export default function CustomerDashboard({
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-              {/* Cards vs List view toggle */}
+              {/* Linewise vs Grid view toggle */}
               <div className="cust-view-toggle-wrap">
-                <button
-                  type="button"
-                  className={`cust-view-toggle-btn ${categoryViewMode === "grid" ? "active" : ""}`}
-                  onClick={() => setCategoryViewMode("grid")}
-                  title="View all categories as interactive cards"
-                >
-                  <Grid size={15} />
-                  <span>Cards View</span>
-                </button>
                 <button
                   type="button"
                   className={`cust-view-toggle-btn ${categoryViewMode === "linewise" ? "active" : ""}`}
                   onClick={() => setCategoryViewMode("linewise")}
-                  title="View categories organized as rows"
+                  title="View categories organized linewise (Row format)"
                 >
-                  <List size={15} />
-                  <span>List View</span>
+                  <List size={14} />
+                  <span>Linewise</span>
+                </button>
+                <button
+                  type="button"
+                  className={`cust-view-toggle-btn ${categoryViewMode === "grid" ? "active" : ""}`}
+                  onClick={() => setCategoryViewMode("grid")}
+                  title="View categories as grid cards"
+                >
+                  <Grid size={14} />
+                  <span>Grid</span>
                 </button>
               </div>
 
@@ -1535,12 +1797,7 @@ export default function CustomerDashboard({
                           <CategoryIcon name={cat.icon} size={22} />
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
-                            <div className="cust-50-title">{cat.name}</div>
-                            <span style={{ fontSize: "0.68rem", fontWeight: 700, background: "#F2F5F0", color: "#142D27", padding: "2px 7px", borderRadius: "9999px", whiteSpace: "nowrap" }}>
-                              {(cat.services || []).length} Services
-                            </span>
-                          </div>
+                          <div className="cust-50-title">{cat.name}</div>
                           <span className="cust-50-group-badge">{cat.groupName}</span>
                         </div>
                       </div>
@@ -1879,20 +2136,115 @@ export default function CustomerDashboard({
 
           {/* Worker Cards Grid (Step 5) */}
           <div className="cust-worker-grid">
-            {displayedWorkers.length === 0 ? (
-              <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "3rem", background: "#FFFFFF", borderRadius: "20px", border: "1px solid #DDE4DA" }}>
-                <User size={40} color="#b2c0b6" style={{ margin: "0 auto 8px" }} />
-                <div style={{ fontWeight: 800, color: "#29342F", fontSize: "1.1rem" }}>No matching workers found</div>
-                <p style={{ fontSize: "0.85rem", color: "#6F7C72", margin: "4px 0 16px" }}>
-                  Try selecting "All Trades" or submit a general booking request for any of our 50 categories.
+            {workersLoading ? (
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  textAlign: "center",
+                  padding: "4rem 1.5rem",
+                  background: "#FFFFFF",
+                  borderRadius: "20px",
+                  border: "1px solid #DDE4DA",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    border: "3px solid rgba(11, 34, 27, 0.12)",
+                    borderTopColor: "#0B221B",
+                    borderRadius: "50%",
+                    animation: "spin 0.8s linear infinite",
+                  }}
+                />
+                <span style={{ fontSize: "0.95rem", fontWeight: 700, color: "#29342F" }}>
+                  Fetching verified available workers...
+                </span>
+                <span style={{ fontSize: "0.82rem", color: "#88978C" }}>
+                  Validating live database availability and approval status
+                </span>
+              </div>
+            ) : workersError ? (
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  textAlign: "center",
+                  padding: "3.5rem 1.5rem",
+                  background: "#FFF5F5",
+                  borderRadius: "20px",
+                  border: "1px solid #FED7D7",
+                }}
+              >
+                <AlertCircle size={42} color="#E53E3E" style={{ margin: "0 auto 12px" }} />
+                <div style={{ fontWeight: 800, color: "#9B2C2C", fontSize: "1.1rem", marginBottom: "6px" }}>
+                  {workersError}
+                </div>
+                <p style={{ fontSize: "0.85rem", color: "#C53030", margin: "0 auto 16px" }}>
+                  Could not retrieve active workers from Supabase. Unfiltered workers are blocked.
                 </p>
                 <button
-                  className="cust-btn-book-now"
-                  style={{ display: "inline-flex", width: "auto", margin: "0 auto" }}
-                  onClick={() => handleOpenBooking(selectedCategoryFilter !== "all" ? selectedCategoryFilter : "Plumbing")}
+                  type="button"
+                  onClick={() => fetchEligibleWorkers()}
+                  style={{
+                    background: "#E53E3E",
+                    color: "#FFFFFF",
+                    border: "none",
+                    padding: "9px 20px",
+                    borderRadius: "8px",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                    cursor: "pointer",
+                  }}
                 >
-                  <span>Post Booking Request</span>
+                  Retry Loading
                 </button>
+              </div>
+            ) : displayedWorkers.length === 0 ? (
+              <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "3.5rem 1.5rem", background: "#FFFFFF", borderRadius: "20px", border: "1px solid #DDE4DA" }}>
+                <User size={44} color="#b2c0b6" style={{ margin: "0 auto 12px" }} />
+                <div style={{ fontWeight: 800, color: "#29342F", fontSize: "1.15rem", marginBottom: "8px" }}>
+                  No available workers for this service right now. Please try another service or check again later.
+                </div>
+                <p style={{ fontSize: "0.85rem", color: "#6F7C72", margin: "6px auto 18px", maxWidth: "460px", lineHeight: "1.45" }}>
+                  {selectedCategoryFilter !== "all"
+                    ? `Currently no approved professional has saved "${selectedCategoryFilter}" in their active skills, or all matching artisans are currently offline.`
+                    : "No verified artisans meet the selected criteria at this moment."}
+                </p>
+                <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
+                  {selectedCategoryFilter !== "all" && (
+                    <button
+                      type="button"
+                      style={{
+                        background: "#F7F5EF",
+                        border: "1px solid #DDE4DA",
+                        color: "#29342F",
+                        borderRadius: "9999px",
+                        padding: "9px 18px",
+                        fontWeight: 700,
+                        fontSize: "0.82rem",
+                        cursor: "pointer",
+                      }}
+                      onClick={() => {
+                        setSelectedCategoryFilter("all");
+                        setSelectedSubService("");
+                      }}
+                    >
+                      View All Workers
+                    </button>
+                  )}
+                  <button
+                    className="cust-btn-book-now"
+                    style={{ display: "inline-flex", width: "auto", margin: 0 }}
+                    onClick={() => handleOpenBooking(selectedCategoryFilter !== "all" ? selectedCategoryFilter : "Plumbing")}
+                  >
+                    <span>Post {selectedCategoryFilter !== "all" ? selectedCategoryFilter : ""} Booking Request</span>
+                    <ArrowRight size={14} />
+                  </button>
+                </div>
               </div>
             ) : (
               displayedWorkers.map((worker) => (
@@ -1928,9 +2280,9 @@ export default function CustomerDashboard({
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                     <div className="cust-worker-rating-row" style={{ margin: 0 }}>
                       <Star size={15} fill="#D6B779" color="#D6B779" />
-                      <span>{worker.rating ? Number(worker.rating).toFixed(1) : "4.9"}</span>
+                      <span>{worker.rating ? Number(worker.rating).toFixed(1) : "5.0"}</span>
                       <span style={{ color: "#6F7C72", fontWeight: 500 }}>
-                        ({worker.reviews_count || 18} reviews)
+                        {worker.reviews_count ? `(${worker.reviews_count} reviews)` : "(New)"}
                       </span>
                     </div>
 
@@ -1967,23 +2319,23 @@ export default function CustomerDashboard({
                     })}
                   </div>
 
-                  {/* Meta: Availability, Completed Jobs, Optional Pricing */}
+                  {/* Meta: Availability, Service Area, Hourly Rate */}
                   <div className="cust-worker-meta-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.78rem", borderTop: "1px solid #F0ECE4", paddingTop: "8px", marginTop: "4px" }}>
                     <span style={{ color: "#347B63", fontWeight: 700, display: "flex", alignItems: "center", gap: "4px" }}>
                       <Check size={13} />
-                      <span>{worker.availability || "Accepts Requests"}</span>
+                      <span>{worker.is_available ? (worker.availability || "Available Today") : "Unavailable"}</span>
                     </span>
                     <span style={{ color: "#6F7C72", fontWeight: 600 }}>
-                      🏆 {worker.completed_jobs_count || 48} jobs done
+                      📍 {worker.service_area || worker.city || "Guntur & Nearby"}
                     </span>
-                    {worker.pricing && (
+                    {worker.hourly_rate ? (
                       <span style={{ color: "#B98739", fontWeight: 700 }}>
-                        From ₹{worker.pricing}
+                        ₹{worker.hourly_rate}/hr
                       </span>
-                    )}
+                    ) : null}
                   </div>
 
-                  {/* Actions: View Profile, Call Button, Bookmark & Book Now */}
+                  {/* Actions: View Profile, Call Button (if phone present), Bookmark & Book Now */}
                   <div className="cust-worker-actions-row" style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "10px" }} onClick={(e) => e.stopPropagation()}>
                     <button
                       className="cust-btn-view-profile"
@@ -1995,25 +2347,28 @@ export default function CustomerDashboard({
                     >
                       View Profile
                     </button>
-                    <a
-                      href={`tel:${worker.phone || "+919848022338"}`}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{
-                        background: "#F7F5EF",
-                        color: "#142D27",
-                        border: "1px solid #DDE4DA",
-                        borderRadius: "10px",
-                        padding: "9px 10px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        textDecoration: "none",
-                        transition: "all 0.15s ease",
-                      }}
-                      title="Call Worker (Subject to privacy rules)"
-                    >
-                      <Phone size={14} />
-                    </a>
+                    {worker.phone && (
+                      <a
+                        href={`tel:${worker.phone}`}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          background: "#F7F5EF",
+                          color: "#142D27",
+                          border: "1px solid #DDE4DA",
+                          borderRadius: "10px",
+                          padding: "9px 10px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          textDecoration: "none",
+                          transition: "all 0.15s ease",
+                        }}
+                        title={`Call ${worker.display_name}`}
+                      >
+                        <Phone size={14} />
+                      </a>
+                    )}
+
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -2996,9 +3351,40 @@ export default function CustomerDashboard({
             {/* 2. Scrollable Modal Body */}
             <div style={{ padding: "1.25rem 1.5rem", overflowY: "auto", flex: 1 }}>
               {formError && (
-                <div className="auth-alert error" style={{ marginBottom: "1rem" }}>
-                  <AlertCircle size={18} />
-                  <span>{formError}</span>
+                <div
+                  className="auth-alert error"
+                  style={{
+                    marginBottom: "1rem",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                    <span style={{ fontSize: "0.88rem" }}>{formError}</span>
+                  </div>
+                  {formError.toLowerCase().includes("sign in") && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAuthModalOpen(true)}
+                      style={{
+                        background: "#0F3E32",
+                        color: "#FFFFFF",
+                        border: "none",
+                        borderRadius: "8px",
+                        padding: "6px 14px",
+                        fontSize: "0.8rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}
+                    >
+                      Sign In Now →
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -3919,6 +4305,14 @@ export default function CustomerDashboard({
           </div>
         </div>
       )}
+
+      {/* Inline Customer Auth Dialog */}
+      <AuthLoginScreen
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthSuccess={handleAuthSuccess}
+        lang={lang}
+      />
     </div>
   );
 }

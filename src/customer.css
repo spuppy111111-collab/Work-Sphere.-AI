@@ -489,51 +489,11 @@
   color: #D6B779 !important;
 }
 
-/* Category View Toggle (Cards vs List) */
-.cust-view-toggle-wrap {
-  display: inline-flex;
-  align-items: center;
-  background: #EAEFEA;
-  border: 1px solid #DDE4DA;
-  border-radius: 9999px;
-  padding: 3px;
-  gap: 2px;
-}
-
-.cust-view-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 9999px;
-  border: none;
-  background: transparent;
-  color: #6F7C72;
-  font-size: 0.82rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.cust-view-toggle-btn:hover {
-  color: #142D27;
-}
-
-.cust-view-toggle-btn.active {
-  background: #142D27;
-  color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(20, 45, 39, 0.2);
-}
-
-.cust-view-toggle-btn.active svg {
-  color: #D6B779;
-}
-
 .cust-50-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-  gap: 1.35rem;
-  margin-top: 1.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.75rem;
+  margin-top: 1.5rem;
   margin-bottom: 2rem;
 }
 
