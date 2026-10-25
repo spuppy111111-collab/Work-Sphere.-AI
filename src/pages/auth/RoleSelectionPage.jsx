@@ -35,24 +35,24 @@ export default function RoleSelectionPage({ lang = "en" }) {
     <div className="role-landing-page">
       {/* Top Navigation Bar */}
       <header className="role-navbar">
-        <div style={{ display: "flex", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
           {/* Back to Landing Page Button on Left */}
           <button
             type="button"
             onClick={() => navigate("/")}
+            className="role-back-btn"
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: "8px",
+              gap: "6px",
               background: "#ffffff",
               border: "1.5px solid #cbd5e1",
               color: "#0f172a",
-              padding: "7px 15px",
+              padding: "7px 12px",
               borderRadius: "10px",
               fontWeight: "700",
-              fontSize: "0.85rem",
+              fontSize: "0.82rem",
               cursor: "pointer",
-              marginRight: "18px",
               boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
               transition: "all 0.2s ease",
             }}
@@ -66,7 +66,7 @@ export default function RoleSelectionPage({ lang = "en" }) {
             }}
           >
             <ArrowLeft size={16} />
-            <span>{isEn ? "Back to Landing Page" : "ల్యాండింగ్ పేజీ"}</span>
+            <span>{isEn ? "Back" : "వెనుకకు"}</span>
           </button>
 
           <div className="role-nav-logo">

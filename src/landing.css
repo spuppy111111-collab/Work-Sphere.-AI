@@ -1205,15 +1205,20 @@
 @media (max-width: 767px) {
   .landing-page-root {
     width: 100% !important;
-    max-width: 100vw !important;
-    overflow-x: hidden !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .landing-hero {
+    padding: 2.5rem 0 3.5rem !important;
   }
 
   .landing-container,
   .landing-container-wide {
     padding: 0 16px !important;
     width: 100% !important;
-    max-width: 100vw !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
     box-sizing: border-box !important;
   }
 
@@ -1221,14 +1226,41 @@
     height: 60px !important;
   }
 
+  .landing-hero-headline,
   .landing-hero-title {
-    font-size: 1.85rem !important;
-    line-height: 1.25 !important;
+    font-size: clamp(1.75rem, 6.5vw, 2.5rem) !important;
+    line-height: 1.2 !important;
     word-break: break-word !important;
   }
 
   .landing-hero-sub {
     font-size: 0.92rem !important;
+    margin-bottom: 1.5rem !important;
+  }
+
+  .hero-floating-badge-top {
+    left: 8px !important;
+    top: -14px !important;
+    padding: 6px 10px !important;
+  }
+
+  .hero-floating-badge-bottom {
+    right: 8px !important;
+    bottom: -14px !important;
+    padding: 6px 10px !important;
+  }
+
+  .hero-collage-card {
+    padding: 12px !important;
+    border-radius: 20px !important;
+  }
+
+  .hero-collage-left-tall {
+    height: 240px !important;
+  }
+
+  .hero-collage-thumb {
+    height: 114px !important;
   }
 
   .landing-services-grid {
@@ -1261,12 +1293,32 @@
   }
 }
 
-@media (max-width: 359px) {
+@media (max-width: 375px) {
   .landing-services-grid {
     grid-template-columns: 1fr !important;
     gap: 10px !important;
   }
 
+  .hero-collage-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .hero-collage-left-tall {
+    height: 200px !important;
+  }
+
+  .hero-collage-right-stack {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+  }
+
+  .hero-collage-thumb {
+    flex: 1 !important;
+    height: 90px !important;
+  }
+
+  .landing-hero-headline,
   .landing-hero-title {
     font-size: 1.6rem !important;
   }

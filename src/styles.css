@@ -768,7 +768,7 @@ button {
 /* WORKER CARDS */
 .worker-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
   gap: 1.35rem;
 }
 
@@ -3467,12 +3467,13 @@ body {
 }
 
 /* 3. Mobile Layout across Dashboards (320px to 767px) */
+/* 3. Mobile Layout across Dashboards (320px to 767px) */
 @media (max-width: 767px) {
   .app-container {
     flex-direction: column !important;
     width: 100% !important;
-    max-width: 100vw !important;
-    overflow-x: hidden !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
     min-height: 100dvh !important;
   }
 
@@ -3494,11 +3495,20 @@ body {
     transform: translateX(0) !important;
   }
 
+  .sidebar-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(0, 0, 0, 0.6) !important;
+    backdrop-filter: blur(2px) !important;
+    -webkit-backdrop-filter: blur(2px) !important;
+    z-index: 999 !important;
+  }
+
   .main-wrapper {
     margin-left: 0 !important;
     width: 100% !important;
-    max-width: 100vw !important;
-    overflow-x: hidden !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
     min-height: 100dvh !important;
     display: flex !important;
     flex-direction: column !important;
@@ -3509,9 +3519,23 @@ body {
     padding: 16px !important;
     padding-bottom: calc(76px + env(safe-area-inset-bottom, 14px)) !important;
     width: 100% !important;
-    max-width: 100vw !important;
-    overflow-x: hidden !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
     box-sizing: border-box !important;
+  }
+
+  /* Allow flex/grid containers to shrink properly */
+  .main-wrapper > *,
+  .content-body > *,
+  .admin-top-stats > *,
+  .admin-mid-grid > *,
+  .admin-bottom-grid > *,
+  .worker-main-grid > *,
+  .worker-bottom-split > *,
+  .worker-stats-row > *,
+  .role-cards-container > *,
+  .role-cards-grid > * {
+    min-width: 0 !important;
   }
 
   /* Compact Topbar on mobile */
@@ -3520,7 +3544,8 @@ body {
     padding: 0 12px !important;
     gap: 8px !important;
     width: 100% !important;
-    max-width: 100vw !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
     box-sizing: border-box !important;
   }
 
@@ -3533,6 +3558,7 @@ body {
     border-radius: 8px !important;
     background: #f1f5f9 !important;
     color: #142D27 !important;
+    flex-shrink: 0 !important;
   }
 
   .breadcrumbs {
@@ -3545,6 +3571,7 @@ body {
 
   .topbar-right {
     gap: 8px !important;
+    flex-shrink: 0 !important;
   }
 
   .profile-pill {
@@ -3598,6 +3625,7 @@ body {
     align-items: flex-end !important;
     justify-content: center !important;
     background: rgba(0, 0, 0, 0.65) !important;
+    box-sizing: border-box !important;
   }
 
   .modal-card {
@@ -3624,7 +3652,7 @@ body {
   }
 
   table {
-    min-width: 500px;
+    min-width: 480px;
   }
 
   /* Auth Pages Mobile Layout */
@@ -3633,6 +3661,26 @@ body {
     min-height: 100dvh !important;
     align-items: center !important;
     box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .auth-glow-1,
+  .auth-glow-2 {
+    max-width: 80vw !important;
+    max-height: 80vw !important;
+    pointer-events: none !important;
+  }
+
+  .auth-header-bar {
+    padding: 10px 0 16px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .auth-card-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   .auth-form-card {
@@ -3644,7 +3692,75 @@ body {
   }
 }
 
-/* 4. Tablet Breakpoint (768px to 1023px) */
+/* 4. Small Mobile Specific (<= 480px) */
+@media (max-width: 480px) {
+  .role-landing-page {
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .role-navbar {
+    padding: 10px 12px !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .role-nav-links {
+    display: none !important;
+  }
+
+  .role-main-content {
+    padding: 0.75rem 12px 2rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .role-title-group {
+    margin-bottom: 1.5rem !important;
+  }
+
+  .role-hero-title {
+    font-size: clamp(1.45rem, 5.5vw, 1.85rem) !important;
+    line-height: 1.25 !important;
+    word-break: break-word !important;
+  }
+
+  .role-hero-subtitle {
+    font-size: 0.86rem !important;
+  }
+
+  .role-cards-container,
+  .role-cards-grid,
+  .kpi-grid,
+  .worker-card-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    width: 100% !important;
+  }
+
+  .role-action-card {
+    padding: 1.25rem 1rem !important;
+    border-radius: 18px !important;
+  }
+
+  .role-circle-icon {
+    width: 58px !important;
+    height: 58px !important;
+  }
+
+  .auth-form-card {
+    padding: 16px 12px !important;
+  }
+
+  table {
+    min-width: 440px;
+  }
+}
+
+/* 5. Tablet Breakpoint (768px to 1023px) */
 @media (min-width: 768px) and (max-width: 1023px) {
   .sidebar {
     width: 220px !important;
@@ -3658,7 +3774,7 @@ body {
   }
 }
 
-/* 5. Desktop Breakpoint (1024px and above) */
+/* 6. Desktop Breakpoint (1024px and above) */
 @media (min-width: 1024px) {
   .mobile-bottom-nav {
     display: none !important;

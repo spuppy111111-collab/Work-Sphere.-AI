@@ -264,6 +264,13 @@ export default function App() {
 
     return (
       <div className={`app-container ${effectiveRole === "customer" ? "customer-theme" : ""}`}>
+        {isMobileOpen && (
+          <div
+            className="sidebar-backdrop"
+            onClick={() => setIsMobileOpen(false)}
+            aria-label="Close navigation"
+          />
+        )}
         <Sidebar
           currentRole={effectiveRole}
           activeTab={activeTab}

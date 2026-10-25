@@ -270,8 +270,8 @@ export default function Topbar({
               style={{
                 position: "absolute",
                 top: "46px",
-                right: 0,
-                width: "320px",
+                width: "min(320px, calc(100vw - 24px))",
+                maxWidth: "calc(100vw - 24px)",
                 background: "#fff",
                 borderRadius: "12px",
                 boxShadow: "0 10px 25px -5px rgba(0,0,0,0.15)",

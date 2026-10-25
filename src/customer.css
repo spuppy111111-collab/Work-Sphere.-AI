@@ -88,7 +88,7 @@
 /* Worker Cards Grid (Find a Worker Tab) */
 .cust-worker-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
   gap: 1.5rem;
   margin-top: 1.5rem;
 }
@@ -491,7 +491,7 @@
 
 .cust-50-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
   gap: 1.75rem;
   margin-top: 1.5rem;
   margin-bottom: 2rem;
@@ -1229,5 +1229,64 @@
   background: #FFFFFF;
   color: #142D27;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* Responsive Customer Portal Enhancements */
+@media (max-width: 767px) {
+  .cust-hero-card-forest {
+    padding: 1.5rem 1.25rem !important;
+    border-radius: 18px !important;
+  }
+  .cust-hero-title-light {
+    font-size: clamp(1.4rem, 5.5vw, 1.85rem) !important;
+  }
+  .cust-hero-search-forest {
+    padding: 4px 6px 4px 14px !important;
+    gap: 6px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .cust-hero-search-btn-gold {
+    padding: 8px 14px !important;
+    font-size: 0.82rem !important;
+  }
+  .cust-worker-grid,
+  .cust-50-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+  .cust-worker-card,
+  .cust-50-card {
+    padding: 1.15rem !important;
+    border-radius: 16px !important;
+  }
+  .cust-category-line-row {
+    padding: 1rem !important;
+    gap: 12px !important;
+  }
+  .cust-category-line-left {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  .cust-booking-drawer {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 20px 20px 0 0 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .cust-hero-card-forest {
+    padding: 1.25rem 1rem !important;
+  }
+  .cust-hero-search-btn-gold span {
+    display: none;
+  }
+  .cust-hero-search-btn-gold {
+    padding: 8px 12px !important;
+  }
+  .cust-category-line-skills {
+    display: none !important;
+  }
 }
 

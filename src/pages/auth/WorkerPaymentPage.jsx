@@ -664,8 +664,10 @@ export default function WorkerPaymentPage({ lang = "en" }) {
               {/* Real FamX QR image asset */}
               <div
                 style={{
-                  width: "250px",
-                  height: "250px",
+                  width: "100%",
+                  maxWidth: "230px",
+                  height: "auto",
+                  aspectRatio: "1/1",
                   margin: "0 auto 1.25rem",
                   background: "#081B15",
                   padding: "10px",
@@ -676,6 +678,7 @@ export default function WorkerPaymentPage({ lang = "en" }) {
                   alignItems: "center",
                   justifyContent: "center",
                   overflow: "hidden",
+                  boxSizing: "border-box",
                 }}
               >
                 {qrLoaded ? (
@@ -708,12 +711,15 @@ export default function WorkerPaymentPage({ lang = "en" }) {
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
+                  justifyContent: "center",
+                  flexWrap: "wrap",
                   gap: "10px",
                   background: "rgba(11, 34, 27, 0.8)",
                   border: "1px solid rgba(214, 183, 121, 0.4)",
                   padding: "8px 14px",
                   borderRadius: "10px",
                   maxWidth: "100%",
+                  boxSizing: "border-box",
                 }}
               >
                 <div style={{ textAlign: "left" }}>

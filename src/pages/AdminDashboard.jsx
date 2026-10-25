@@ -1088,7 +1088,8 @@ export default function AdminDashboard({ lang = "en", currentUser, onNavigate })
             </button>
           </div>
 
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem", textAlign: "left" }}>
+          <div className="table-responsive">
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem", textAlign: "left" }}>
             <thead>
               <tr style={{ color: "#94a3b8", borderBottom: "1px solid #f1f5f9", fontSize: "0.72rem" }}>
                 <th style={{ padding: "8px 6px", fontWeight: "600" }}>Name</th>
@@ -1244,6 +1245,7 @@ export default function AdminDashboard({ lang = "en", currentUser, onNavigate })
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Card 2: Recent Bookings */}
@@ -1283,7 +1285,8 @@ export default function AdminDashboard({ lang = "en", currentUser, onNavigate })
             </button>
           </div>
 
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem", textAlign: "left" }}>
+          <div className="table-responsive">
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem", textAlign: "left" }}>
             <thead>
               <tr style={{ color: "#94a3b8", borderBottom: "1px solid #f1f5f9", fontSize: "0.72rem" }}>
                 <th style={{ padding: "8px 6px", fontWeight: "600" }}>Customer</th>
@@ -1352,6 +1355,7 @@ export default function AdminDashboard({ lang = "en", currentUser, onNavigate })
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Card 3: WorkSphere AI Platform Mission Banner */}

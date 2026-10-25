@@ -28,7 +28,8 @@ import {
   Bookmark,
   HelpCircle,
   Home,
-  ArrowRight
+  ArrowRight,
+  X
 } from "lucide-react";
 
 export default function Sidebar({
@@ -152,6 +153,23 @@ export default function Sidebar({
             WORKER
           </span>
         )}
+
+        <button
+          className="mobile-sidebar-close"
+          onClick={() => setIsMobileOpen(false)}
+          aria-label="Close Navigation"
+          style={{
+            background: "transparent",
+            border: "none",
+            color: currentRole === "customer" ? "#D6B779" : "#94a3b8",
+            cursor: "pointer",
+            padding: "6px",
+            display: "none",
+            borderRadius: "6px",
+          }}
+        >
+          <X size={20} />
+        </button>
       </div>
 
       {/* Navigation Links */}
